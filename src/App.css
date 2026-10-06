@@ -1,0 +1,61 @@
+/* ==========================================================================
+   APPLICATION ROOT & FOOTER STYLES (App.css)
+   ========================================================================== */
+
+.app-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  transition: background 0.3s ease;
+}
+
+.app-wrapper[data-app="money"] {
+  background-color: #000000;
+  background-image:
+    radial-gradient(1100px 600px at 15% 10%, rgba(168, 85, 247, 0.15) 0%, transparent 60%),
+    radial-gradient(1300px 700px at 85% 85%, rgba(124, 58, 237, 0.12) 0%, transparent 65%),
+    radial-gradient(800px 500px at 50% 50%, rgba(147, 51, 234, 0.05) 0%, transparent 70%),
+    linear-gradient(180deg, #050308 0%, #000000 100%);
+  background-attachment: fixed;
+}
+
+.app-main-content {
+  flex: 1;
+  padding-top: 8px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+}
+
+.app-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border-subtle);
+  padding: 20px 32px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.app-footer-brand-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-footer-links-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-footer-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
