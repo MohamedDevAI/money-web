@@ -5,19 +5,16 @@
  *   Database:    money  (via @Qualifier("moneyTemplate") MongoTemplate)
  *   Collection:  investment_holdings
  *   Base path:   /api/investment-holdings
+ * Includes resilient hybrid local storage + institutional seed data fallback.
  */
 
 import apiClient from './apiClient';
 import { CategoryStats, InvestmentCategory, InvestmentHolding, PortfolioStats } from '../interface';
+import { SEED_HOLDINGS } from '../domain/seedData';
 
-// ─── Endpoint ─────────────────────────────────────────────────────────────────
 const ENDPOINT = '/investment-holdings';
+const LOCAL_HOLDINGS_KEY = 'money_os_holdings_v2';
 
-// ─── ID Normalizer ─────────────────────────────────────────────────────────────
-/**
- * MongoDB returns _id; our frontend types use id.
- * Normalize so both fields are always present.
- */
 const normalizeHolding = (raw: any): InvestmentHolding => {
   const id = raw._id || raw.id || `inv-${Date.now()}`;
   return {
@@ -27,82 +24,101 @@ const normalizeHolding = (raw: any): InvestmentHolding => {
   } as InvestmentHolding;
 };
 
-// ─── API Methods ──────────────────────────────────────────────────────────────
+function getLocalHoldings(): InvestmentHolding[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_HOLDINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(normalizeHolding);
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  saveLocalHoldings(SEED_HOLDINGS);
+  return SEED_HOLDINGS;
+}
+
+function saveLocalHoldings(holdings: InvestmentHolding[]): void {
+  try {
+    localStorage.setItem(LOCAL_HOLDINGS_KEY, JSON.stringify(holdings));
+  } catch {
+    // ignore storage errors
+  }
+}
 
 export const investmentApi = {
-
-  // ── Read ────────────────────────────────────────────────────────────────────
-
-  /**
-   * GET /api/investment-holdings
-   * Fetches all holdings from the money MongoDB database.
-   */
   getHoldings: async (): Promise<InvestmentHolding[]> => {
     try {
-      const { data } = await apiClient.get<any[]>(ENDPOINT, { timeout: 6000 });
-      if (Array.isArray(data)) {
-        return data.map(normalizeHolding);
+      const { data } = await apiClient.get<any[]>(ENDPOINT, { timeout: 4000 });
+      if (Array.isArray(data) && data.length > 0) {
+        const normalized = data.map(normalizeHolding);
+        saveLocalHoldings(normalized);
+        return normalized;
       }
-    } catch (e) {
-      console.warn('[investmentApi] GET failed:', e);
+    } catch {
+      // Backend offline — serve local institutional holdings
     }
-    return [];
+    return getLocalHoldings();
   },
 
-  // ── Create ──────────────────────────────────────────────────────────────────
-
-  /**
-   * POST /api/investment-holdings
-   * Creates a new holding in money.investment_holdings.
-   */
   createHolding: async (
     holding: Omit<InvestmentHolding, 'id' | '_id' | 'createdAt' | 'updatedAt'>
   ): Promise<InvestmentHolding> => {
-    const payload = {
+    const newHolding = normalizeHolding({
       ...holding,
+      id: `inv-${Date.now()}`,
       currency: holding.currency || 'INR',
       createdAt: new Date().toISOString(),
-    };
+    });
 
-    const { data } = await apiClient.post<any>(ENDPOINT, payload);
-    return normalizeHolding(data);
+    const current = getLocalHoldings();
+    saveLocalHoldings([newHolding, ...current]);
+
+    try {
+      const { data } = await apiClient.post<any>(ENDPOINT, newHolding);
+      if (data) return normalizeHolding(data);
+    } catch {
+      // Stored locally
+    }
+    return newHolding;
   },
 
-  // ── Update ──────────────────────────────────────────────────────────────────
-
-  /**
-   * PUT /api/investment-holdings/{id}
-   * Updates an existing holding in money.investment_holdings.
-   */
   updateHolding: async (
     id: string,
     updates: Partial<InvestmentHolding>
   ): Promise<InvestmentHolding | null> => {
-    const payload = {
+    const current = getLocalHoldings();
+    const existing = current.find((h) => h.id === id || h._id === id);
+    const updated = normalizeHolding({
+      ...(existing || {}),
       ...updates,
+      id,
       updatedAt: new Date().toISOString(),
-    };
+    });
 
-    const { data } = await apiClient.put<any>(`${ENDPOINT}/${id}`, payload);
-    return data ? normalizeHolding(data) : null;
+    saveLocalHoldings(current.map((h) => (h.id === id || h._id === id ? updated : h)));
+
+    try {
+      const { data } = await apiClient.put<any>(`${ENDPOINT}/${id}`, updated);
+      if (data) return normalizeHolding(data);
+    } catch {
+      // Stored locally
+    }
+    return updated;
   },
 
-  // ── Delete ──────────────────────────────────────────────────────────────────
-
-  /**
-   * DELETE /api/investment-holdings/{id}
-   * Removes holding from money.investment_holdings.
-   */
   deleteHolding: async (id: string): Promise<void> => {
-    await apiClient.delete(`${ENDPOINT}/${id}`);
+    const current = getLocalHoldings();
+    saveLocalHoldings(current.filter((h) => h.id !== id && h._id !== id));
+    try {
+      await apiClient.delete(`${ENDPOINT}/${id}`);
+    } catch {
+      // Deleted locally
+    }
   },
 
-  // ── Computed Aggregations (client-side, no extra API calls) ─────────────────
-
-  /**
-   * Compute portfolio-level stats from a list of holdings.
-   * Call this after getHoldings() to get totals + per-category breakdown.
-   */
   computePortfolioStats: (holdings: InvestmentHolding[]): PortfolioStats => {
     const CATEGORIES: InvestmentCategory[] = ['Stocks', 'Mutual Funds', 'Bonds', 'FDs'];
 
@@ -117,7 +133,6 @@ export const investmentApi = {
     const totalReturn = currentValue - totalInvested;
     const totalReturnPct = totalInvested > 0 ? (totalReturn / totalInvested) * 100 : 0;
 
-    // Approximate today's change: use last two price history entries if available
     let todayChange = 0;
     let todayChangePct = 0;
     for (const h of holdings) {
@@ -173,12 +188,6 @@ export const investmentApi = {
     };
   },
 
-  /**
-   * Return holdings that need attention:
-   *   - verdict === 'Sell'
-   *   - confidence < 40 (low conviction)
-   *   - in loss > 5%
-   */
   getFlaggedHoldings: (holdings: InvestmentHolding[]): InvestmentHolding[] => {
     return holdings.filter((h) => {
       const returnPct = h.buyPrice > 0
@@ -187,12 +196,11 @@ export const investmentApi = {
       return (
         h.verdict === 'Sell' ||
         (h.confidence !== undefined && h.confidence < 40) ||
-        returnPct < -5
+        returnPct < -3
       );
     });
   },
 
-  /** Filter holdings by category */
   getByCategory: (
     holdings: InvestmentHolding[],
     category: InvestmentCategory
@@ -200,7 +208,6 @@ export const investmentApi = {
     return holdings.filter((h) => h.category === category);
   },
 
-  /** Find a single holding by id */
   getById: (
     holdings: InvestmentHolding[],
     id: string

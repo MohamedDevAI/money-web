@@ -117,30 +117,30 @@ export default function StockListScreen({
     if (roe >= 20 && pe <= 30 && rsi < 65) {
       return {
         label: 'Strong Buy / Undervalued',
-        color: '#900dc8',
-        bg: 'rgba(186, 54, 242, 0.15)',
-        border: 'rgba(186, 54, 242, 0.3)',
+        color: '#10b981',
+        bg: 'rgba(16, 185, 129, 0.14)',
+        border: 'rgba(16, 185, 129, 0.35)',
       };
     }
     if (returnPct >= 12 || (roe >= 15 && pe <= 35)) {
       return {
         label: 'Outperform / Accumulate',
-        color: '#910cca',
-        bg: 'rgba(186, 54, 242, 0.15)',
-        border: 'rgba(186, 54, 242, 0.3)',
+        color: '#06b6d4',
+        bg: 'rgba(16, 185, 129, 0.14)',
+        border: 'rgba(16, 185, 129, 0.35)',
       };
     }
     if (pe > 40 || rsi > 70) {
       return {
         label: 'Trim / Premium Valuation',
-        color: '#6b677f',
+        color: '#f43f5e',
         bg: 'rgba(189, 46, 250, 0.12)',
         border: 'rgba(189, 46, 250, 0.35)',
       };
     }
     return {
       label: 'Hold / Fair Value',
-      color: '#9406d0',
+      color: '#38bdf8',
       bg: 'rgba(187, 50, 246, 0.15)',
       border: 'rgba(188, 48, 248, 0.3)',
     };
@@ -183,10 +183,10 @@ export default function StockListScreen({
 
           <div className="inv-hstat-card">
             <div className="hstat-label">Total Unrealized Gain</div>
-            <div className="hstat-val" style={{ color: totalReturn >= 0 ? '#900dc8' : '#6b677f' }}>
+            <div className="hstat-val" style={{ color: totalReturn >= 0 ? '#10b981' : '#f43f5e' }}>
               {mask(formatPctChange(totalReturnPct))}
             </div>
-            <div className="hstat-sub" style={{ color: totalReturn >= 0 ? '#900dc8' : '#6b677f' }}>
+            <div className="hstat-sub" style={{ color: totalReturn >= 0 ? '#10b981' : '#f43f5e' }}>
               ({mask(formatINRCompact(totalReturn))})
             </div>
           </div>
@@ -296,7 +296,7 @@ export default function StockListScreen({
                       <span>•</span>
                       <span>Buy: {mask(formatINR(stock.buyPrice))}</span>
                       <span>→</span>
-                      <span style={{ color: '#900cc8', fontWeight: 700 }}>
+                      <span style={{ color: '#06b6d4', fontWeight: 700 }}>
                         LTP: {mask(formatINR(stock.currentPrice))}
                       </span>
                     </div>
@@ -313,10 +313,10 @@ export default function StockListScreen({
 
                   <div className="inv-metric-cell">
                     <div className="cell-label">Total Gain / Loss</div>
-                    <div className="cell-val" style={{ color: isPositive ? '#900dc8' : '#6b677f' }}>
+                    <div className="cell-val" style={{ color: isPositive ? '#10b981' : '#f43f5e' }}>
                       {mask(formatPctChange(returnPct))}
                     </div>
-                    <div className="cell-sub" style={{ color: isPositive ? '#900dc8' : '#6b677f' }}>
+                    <div className="cell-sub" style={{ color: isPositive ? '#10b981' : '#f43f5e' }}>
                       ({mask(formatINR(returnVal))})
                     </div>
                   </div>

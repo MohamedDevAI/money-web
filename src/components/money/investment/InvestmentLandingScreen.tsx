@@ -113,13 +113,13 @@ export default function InvestmentLandingScreen({
           <div className="inv-metric-tile mf-tile" onClick={onNavigateToMutualFunds}>
             <div className="inv-tile-header">
               <span className="inv-tile-name">
-                <Repeat size={15} color="#900dc8" /> Mutual Funds & SIPs
+                <Repeat size={15} color="#10b981" /> Mutual Funds & SIPs
               </span>
               <span className="inv-tile-count">{mfHoldings.length} Funds</span>
             </div>
             <div className="inv-tile-val">{mask(formatINR(mfValue))}</div>
             <div className="inv-tile-footer">
-              <span style={{ color: mfReturn >= 0 ? '#900dc8' : '#6b677f', fontWeight: 700 }}>
+              <span style={{ color: mfReturn >= 0 ? '#10b981' : '#f43f5e', fontWeight: 700 }}>
                 {mask(formatPctChange(mfReturnPct))}
               </span>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
@@ -132,13 +132,13 @@ export default function InvestmentLandingScreen({
           <div className="inv-metric-tile stock-tile" onClick={onNavigateToStocks}>
             <div className="inv-tile-header">
               <span className="inv-tile-name">
-                <LineChart size={15} color="#9406d0" /> Direct Equities & Stocks
+                <LineChart size={15} color="#38bdf8" /> Direct Equities & Stocks
               </span>
               <span className="inv-tile-count">{stockHoldings.length} Stocks</span>
             </div>
             <div className="inv-tile-val">{mask(formatINR(stockValue))}</div>
             <div className="inv-tile-footer">
-              <span style={{ color: stockReturn >= 0 ? '#900dc8' : '#6b677f', fontWeight: 700 }}>
+              <span style={{ color: stockReturn >= 0 ? '#10b981' : '#f43f5e', fontWeight: 700 }}>
                 {mask(formatPctChange(stockReturnPct))}
               </span>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
@@ -154,7 +154,7 @@ export default function InvestmentLandingScreen({
         <div className="inv-section-header-row">
           <div>
             <h3 className="inv-section-title">
-              <PieChart size={18} color="#910cca" /> Capital Allocation Split
+              <PieChart size={18} color="#06b6d4" /> Capital Allocation Split
             </h3>
             <p className="inv-section-sub">Balanced distribution between systematic mutual funds and high-conviction direct equities</p>
           </div>
@@ -210,7 +210,7 @@ export default function InvestmentLandingScreen({
             </div>
             <div className="inv-entry-stat-box">
               <div className="stat-label">Active SIP / Month</div>
-              <div className="stat-value" style={{ color: '#900dc8' }}>{mask(formatINR(activeSipTotal))}</div>
+              <div className="stat-value" style={{ color: '#10b981' }}>{mask(formatINR(activeSipTotal))}</div>
             </div>
             <div className="inv-entry-stat-box">
               <div className="stat-label">Total Current Value</div>
@@ -218,7 +218,7 @@ export default function InvestmentLandingScreen({
             </div>
             <div className="inv-entry-stat-box">
               <div className="stat-label">Net Gain</div>
-              <div className="stat-value" style={{ color: mfReturn >= 0 ? '#900dc8' : '#6b677f' }}>
+              <div className="stat-value" style={{ color: mfReturn >= 0 ? '#10b981' : '#f43f5e' }}>
                 {mask(formatPctChange(mfReturnPct))}
               </div>
             </div>
@@ -276,7 +276,7 @@ export default function InvestmentLandingScreen({
             </div>
             <div className="inv-entry-stat-box">
               <div className="stat-label">Unrealized Gain</div>
-              <div className="stat-value" style={{ color: stockReturn >= 0 ? '#900dc8' : '#6b677f' }}>
+              <div className="stat-value" style={{ color: stockReturn >= 0 ? '#10b981' : '#f43f5e' }}>
                 {mask(formatPctChange(stockReturnPct))}
               </div>
             </div>
@@ -355,7 +355,7 @@ export default function InvestmentLandingScreen({
                     <div className="inv-flagged-name">{holding.name}</div>
                   </div>
 
-                  <div className="inv-flagged-return-pill" style={{ color: returnPct >= 0 ? '#900dc8' : '#6b677f' }}>
+                  <div className="inv-flagged-return-pill" style={{ color: returnPct >= 0 ? '#10b981' : '#f43f5e' }}>
                     {returnPct >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
                     <span>{mask(formatPctChange(returnPct))}</span>
                   </div>

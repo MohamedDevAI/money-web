@@ -3,11 +3,11 @@ import {
   TrendingDown,
   Activity,
   Plus,
-  Target
+  Target,
 } from 'lucide-react';
 import { formatINR, formatINRCompact } from '../../../utils/formatters';
 import { useMoneyPrivacy } from '../../../context/MoneyPrivacyContext';
-import type { TradingStats } from '../../../types';
+import type { TradingStats } from '../../../interface';
 
 interface TradingKPIHeaderProps {
   stats: TradingStats;
@@ -27,101 +27,101 @@ export default function TradingKPIHeader({ stats, onOpenAddModal }: TradingKPIHe
         <div>
           <div className="trading-sub-badge">
             <Activity size={13} style={{ display: 'inline', marginRight: 5 }} />
-            Active Trading Desk & Derivatives
+            Institutional Execution Desk • Derivatives, Cash & Risk Engine
           </div>
           <h2 className="trading-section-title">
-            Trading Positions & <span className="trading-cyan-gradient">Execution Desk</span>
+            Pro Trading Terminal & <span className="trading-cyan-gradient">Quantitative Blotter</span>
           </h2>
           <p className="trading-section-subtitle">
-            Live journal for equities, options & futures with real-time risk-reward ratios and P&L analytics.
+            Multi-timeframe technical charting, automated position sizing, F&O Greeks payoff lab, and pre-trade risk guardrails.
           </p>
         </div>
 
         <button onClick={onOpenAddModal} className="btn btn-primary trading-add-btn">
-          <Plus size={16} /> Log New Trade
+          <Plus size={16} /> Log Manual Trade
         </button>
       </div>
 
-      {/* 5 KPI Cards Grid */}
+      {/* 6 Institutional KPI Cards Grid */}
       <div className="trading-kpi-grid">
-        {/* Card 1: Capital Deployed */}
+        {/* Card 1: Capital Deployed & Portfolio Heat */}
         <div className="glass-panel trading-kpi-card">
           <div className="trading-kpi-top">
             <span className="trading-kpi-lbl">CAPITAL IN PLAY</span>
-            <span className="badge badge-indigo">
-              {stats.openTradesCount} Active Positions
+            <span className="badge badge-cyan">
+              {stats.openTradesCount} Open
             </span>
           </div>
-          <div className="trading-kpi-val">
+          <div className="trading-kpi-val font-mono">
             {mask(formatINRCompact(stats.capitalDeployed))}
           </div>
           <div className="trading-kpi-subtext">
-            Actual entry value in open market positions
+            SL Risk Heat: <strong className="text-amber">{mask(formatINRCompact(stats.openHeatCapital))}</strong> ({stats.openHeatPct}%)
           </div>
         </div>
 
-        {/* Card 2: Unrealized P&L */}
+        {/* Card 2: Unrealized Mark-to-Market P&L */}
         <div className="glass-panel trading-kpi-card">
           <div className="trading-kpi-top">
-            <span className="trading-kpi-lbl">UNREALIZED P&L</span>
+            <span className="trading-kpi-lbl">UNREALIZED MTM</span>
             <span className={`badge ${isUnrealizedPositive ? 'badge-emerald' : 'badge-rose'}`}>
               {isUnrealizedPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-              Open Mark-to-Market
+              Live Open P&L
             </span>
           </div>
-          <div className={`trading-kpi-val ${isUnrealizedPositive ? 'trading-pnl-green' : 'trading-pnl-red'}`}>
+          <div className={`trading-kpi-val font-mono ${isUnrealizedPositive ? 'text-emerald' : 'text-rose'}`}>
             {mask(`${isUnrealizedPositive ? '+' : ''}${formatINR(stats.totalUnrealizedPnl)}`)}
           </div>
           <div className="trading-kpi-subtext">
-            Floating gain/loss on currently active trades
+            Floating mark-to-market across active positions
           </div>
         </div>
 
-        {/* Card 3: Realized P&L */}
+        {/* Card 3: Net Realized P&L (Post Charges) */}
         <div className="glass-panel trading-kpi-card">
           <div className="trading-kpi-top">
-            <span className="trading-kpi-lbl">REALIZED P&L</span>
+            <span className="trading-kpi-lbl">NET REALIZED P&L</span>
             <span className={`badge ${isRealizedPositive ? 'badge-emerald' : 'badge-rose'}`}>
-              {isRealizedPositive ? '+' : ''}Booked
+              PF: {stats.profitFactor.toFixed(2)}
             </span>
           </div>
-          <div className={`trading-kpi-val ${isRealizedPositive ? 'trading-pnl-green' : 'trading-pnl-red'}`}>
-            {mask(`${isRealizedPositive ? '+' : ''}${formatINR(stats.totalRealizedPnl)}`)}
+          <div className={`trading-kpi-val font-mono ${isRealizedPositive ? 'text-emerald' : 'text-rose'}`}>
+            {mask(`${isRealizedPositive ? '+' : ''}${formatINR(stats.netRealizedPnl)}`)}
           </div>
           <div className="trading-kpi-subtext">
-            Locked returns from settled & closed positions
+            Gross: {mask(formatINRCompact(stats.totalRealizedPnl))} • Taxes: ₹{stats.totalChargesPaid.toLocaleString('en-IN')}
           </div>
         </div>
 
-        {/* Card 4: Win Rate % */}
+        {/* Card 4: Win Accuracy & Streaks */}
         <div className="glass-panel trading-kpi-card">
           <div className="trading-kpi-top">
-            <span className="trading-kpi-lbl">WIN ACCURACY</span>
+            <span className="trading-kpi-lbl">WIN RATE & STREAK</span>
             <span className="badge badge-amber">
               {stats.winCount}W - {stats.lossCount}L
             </span>
           </div>
-          <div className="trading-kpi-val text-amber">
+          <div className="trading-kpi-val font-mono text-amber">
             {stats.totalTrades > 0 ? `${stats.winRate}%` : '0.0%'}
           </div>
           <div className="trading-kpi-subtext">
-            {stats.winCount + stats.lossCount} closed trades evaluated
+            Expectancy: <strong className="text-emerald">+{mask(formatINRCompact(stats.expectancy))}/trade</strong> ({stats.expectancyR}R)
           </div>
         </div>
 
-        {/* Card 5: Average Risk-Reward Ratio */}
+        {/* Card 5: Asymmetric R:R & Discipline */}
         <div className="glass-panel trading-kpi-card">
           <div className="trading-kpi-top">
-            <span className="trading-kpi-lbl">AVG RISK : REWARD</span>
+            <span className="trading-kpi-lbl">ASYMMETRIC R:R</span>
             <span className="badge badge-cyan">
-              <Target size={12} /> Discipline
+              <Target size={12} /> {stats.ruleComplianceScore}% Rule Sync
             </span>
           </div>
-          <div className="trading-kpi-val text-cyan">
+          <div className="trading-kpi-val font-mono text-cyan">
             1 : {stats.avgRiskReward}
           </div>
           <div className="trading-kpi-subtext">
-            Average planned upside to stop-loss downside
+            Sharpe: <strong>{stats.sharpeRatio}</strong> • Max DD: <strong className="text-rose">-{stats.maxDrawdownPct}%</strong>
           </div>
         </div>
       </div>

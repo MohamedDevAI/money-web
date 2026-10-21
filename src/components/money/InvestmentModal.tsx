@@ -306,7 +306,7 @@ export default function InvestmentModal({
               borderRadius: 10,
               background: 'rgba(189, 46, 250, 0.12)',
               border: '1px solid rgba(189, 46, 250, 0.35)',
-              color: '#6b677f',
+              color: '#f43f5e',
               fontSize: '0.85rem',
               marginBottom: 16
             }}

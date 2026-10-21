@@ -5,3 +5,4 @@ export * from './useInvestmentHoldingsQuery';
 export * from './useTheme';
 export * from './useTradesQuery';
 export * from './useFinancialHealthQuery';
+export * from './useLiveMarketFeed';

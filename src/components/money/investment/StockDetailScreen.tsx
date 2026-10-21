@@ -86,16 +86,16 @@ export default function StockDetailScreen({
 
   let verdict = 'BUY / ACCUMULATE';
   let confidence = stock.confidence || 88;
-  let verdictColor = '#a910eb';
-  let verdictBg = 'rgba(186, 54, 242, 0.15)';
-  let verdictBorder = 'rgba(186, 54, 242, 0.35)';
+  let verdictColor = '#10b981';
+  let verdictBg = 'rgba(16, 185, 129, 0.14)';
+  let verdictBorder = 'rgba(16, 185, 129, 0.35)';
   let thesis =
     'Robust return ratios (ROE > 18%) coupled with a conservative balance sheet and a defensive competitive moat. Price is sustaining above key moving averages with supportive institutional volume.';
 
   if (pe > 42 || rsi > 72) {
     verdict = 'TRIM / TAKE PROFIT';
     confidence = 82;
-    verdictColor = '#6b677f';
+    verdictColor = '#f43f5e';
     verdictBg = 'rgba(189, 46, 250, 0.12)';
     verdictBorder = 'rgba(189, 46, 250, 0.35)';
     thesis =
@@ -103,7 +103,7 @@ export default function StockDetailScreen({
   } else if (pe < 22 && roe > 16 && de < 1.0) {
     verdict = 'STRONG BUY / CONVICTION PICK';
     confidence = 92;
-    verdictColor = '#a910eb';
+    verdictColor = '#10b981';
     verdictBg = 'rgba(186, 54, 242, 0.2)';
     verdictBorder = 'rgba(186, 54, 242, 0.45)';
     thesis =
@@ -111,9 +111,9 @@ export default function StockDetailScreen({
   } else if (returnPct < -8 || de > 2.0) {
     verdict = 'NEUTRAL / HOLD UNDER WATCH';
     confidence = 68;
-    verdictColor = '#ad06f5';
-    verdictBg = 'rgba(188, 49, 247, 0.15)';
-    verdictBorder = 'rgba(189, 45, 251, 0.35)';
+    verdictColor = '#f59e0b';
+    verdictBg = 'rgba(245, 158, 11, 0.14)';
+    verdictBorder = 'rgba(245, 158, 11, 0.35)';
     thesis =
       'Balance sheet debt or near-term sector headwinds require monitoring. Maintain existing weight but avoid aggressive averaging until quarterly clarity emerges.';
   }
@@ -150,7 +150,7 @@ export default function StockDetailScreen({
               {f.sector && <span className="inv-item-sector-badge">{f.sector}</span>}
               {f.moatRating && (
                 <span className="inv-pill-badge">
-                  <ShieldCheck size={12} color="#900dc8" /> {f.moatRating} Moat
+                  <ShieldCheck size={12} color="#10b981" /> {f.moatRating} Moat
                 </span>
               )}
             </div>
@@ -171,10 +171,10 @@ export default function StockDetailScreen({
 
             <div className="inv-hero-return-block">
               <div className="val-label">Unrealized P&L</div>
-              <div className="val-main" style={{ color: isPositive ? '#900dc8' : '#6b677f' }}>
+              <div className="val-main" style={{ color: isPositive ? '#10b981' : '#f43f5e' }}>
                 {isPositive ? '+' : ''}{mask(formatPctChange(returnPct))}
               </div>
-              <div className="val-sub" style={{ color: isPositive ? '#900dc8' : '#6b677f' }}>
+              <div className="val-sub" style={{ color: isPositive ? '#10b981' : '#f43f5e' }}>
                 Total: {isPositive ? '+' : ''}{mask(formatINR(returnVal))}
               </div>
             </div>
@@ -206,7 +206,7 @@ export default function StockDetailScreen({
             </div>
             <div className="inv-verdict-kpi-item">
               <span className="kpi-label">Market Consensus</span>
-              <span className="kpi-val" style={{ color: '#910cca' }}>{bullishPct}% Bullish</span>
+              <span className="kpi-val" style={{ color: '#06b6d4' }}>{bullishPct}% Bullish</span>
             </div>
           </div>
         </div>
@@ -253,7 +253,7 @@ export default function StockDetailScreen({
               <Tooltip
                 contentStyle={{
                   backgroundColor: '#f9f7fd',
-                  border: '1px solid rgba(186, 54, 242, 0.3)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
                   borderRadius: 10,
                   fontSize: 12,
                 }}
@@ -308,7 +308,7 @@ export default function StockDetailScreen({
           <div className="inv-section-header-row">
             <div>
               <h3 className="inv-section-title">
-                <Building size={18} color="#9406d0" /> Fundamental Financial Architecture
+                <Building size={18} color="#38bdf8" /> Fundamental Financial Architecture
               </h3>
               <p className="inv-section-sub">Valuation multiples, profitability margins, cash flows, and capital structure</p>
             </div>
@@ -318,13 +318,13 @@ export default function StockDetailScreen({
             {/* Valuation Multiples */}
             <div className="inv-detail-metric-card">
               <div className="metric-card-header">
-                <Layers size={18} color="#9406d0" />
+                <Layers size={18} color="#38bdf8" />
                 <h4>Valuation Multiples</h4>
               </div>
               <div className="spec-table">
                 <div className="spec-row">
                   <span className="spec-label">P/E Ratio (Trailing Twelve Months)</span>
-                  <span className="spec-value" style={{ color: pe < 25 ? '#900dc8' : '#9305d0', fontWeight: 700 }}>
+                  <span className="spec-value" style={{ color: pe < 25 ? '#10b981' : '#9305d0', fontWeight: 700 }}>
                     {pe ? `${pe}x` : '22.4x'}
                   </span>
                 </div>
@@ -340,7 +340,7 @@ export default function StockDetailScreen({
                 </div>
                 <div className="spec-row">
                   <span className="spec-label">Moat Rating</span>
-                  <span className="spec-value" style={{ color: '#900dc8', fontWeight: 700 }}>
+                  <span className="spec-value" style={{ color: '#10b981', fontWeight: 700 }}>
                     {f.moatRating || 'Wide'} Moat
                   </span>
                 </div>
@@ -350,25 +350,25 @@ export default function StockDetailScreen({
             {/* Profitability & Returns */}
             <div className="inv-detail-metric-card">
               <div className="metric-card-header">
-                <TrendingUp size={18} color="#900dc8" />
+                <TrendingUp size={18} color="#10b981" />
                 <h4>Profitability & Capital Efficiency</h4>
               </div>
               <div className="spec-table">
                 <div className="spec-row">
                   <span className="spec-label">Return on Equity (ROE)</span>
-                  <span className="spec-value" style={{ color: roe >= 15 ? '#900dc8' : '#6b677f', fontWeight: 700 }}>
+                  <span className="spec-value" style={{ color: roe >= 15 ? '#10b981' : '#f43f5e', fontWeight: 700 }}>
                     {roe}% {roe >= 15 ? '✓ Top Quartile' : ''}
                   </span>
                 </div>
                 <div className="spec-row">
                   <span className="spec-label">Return on Capital Employed (ROCE)</span>
-                  <span className="spec-value" style={{ color: '#900dc8', fontWeight: 700 }}>
+                  <span className="spec-value" style={{ color: '#10b981', fontWeight: 700 }}>
                     {f.roce ? `${f.roce}%` : '18.2%'}
                   </span>
                 </div>
                 <div className="spec-row">
                   <span className="spec-label">Debt-to-Equity (D/E) Ratio</span>
-                  <span className="spec-value" style={{ color: de < 1.0 ? '#900dc8' : '#9305d0' }}>
+                  <span className="spec-value" style={{ color: de < 1.0 ? '#10b981' : '#9305d0' }}>
                     {de} {de < 1.0 ? '(Conservative Balance Sheet)' : ''}
                   </span>
                 </div>
@@ -396,7 +396,7 @@ export default function StockDetailScreen({
                 </div>
                 <div className="spec-row">
                   <span className="spec-label">Promoter Holding QoQ Change</span>
-                  <span className="spec-value" style={{ color: (f.promoterHoldingChange || 0) >= 0 ? '#900dc8' : '#6b677f' }}>
+                  <span className="spec-value" style={{ color: (f.promoterHoldingChange || 0) >= 0 ? '#10b981' : '#f43f5e' }}>
                     {(f.promoterHoldingChange || 0) >= 0 ? '+' : ''}{f.promoterHoldingChange || 0.0}%
                   </span>
                 </div>
@@ -422,7 +422,7 @@ export default function StockDetailScreen({
           <div className="inv-section-header-row">
             <div>
               <h3 className="inv-section-title">
-                <Activity size={18} color="#910cca" /> Technical Momentum & Trend Indicators
+                <Activity size={18} color="#06b6d4" /> Technical Momentum & Trend Indicators
               </h3>
               <p className="inv-section-sub">Algorithmic momentum oscillators, moving averages, and volatility bands</p>
             </div>
@@ -432,7 +432,7 @@ export default function StockDetailScreen({
             {/* RSI Gauge Card */}
             <div className="inv-tech-card">
               <div className="tech-card-title">RSI (14-Day Momentum)</div>
-              <div className="tech-rsi-val" style={{ color: rsi > 70 ? '#6b677f' : rsi < 35 ? '#900dc8' : '#910cca' }}>
+              <div className="tech-rsi-val" style={{ color: rsi > 70 ? '#f43f5e' : rsi < 35 ? '#10b981' : '#06b6d4' }}>
                 {rsi.toFixed(1)}
               </div>
               <div className="tech-rsi-label">
@@ -443,7 +443,7 @@ export default function StockDetailScreen({
                   className="tech-progress-fill"
                   style={{
                     width: `${Math.min(100, Math.max(5, rsi))}%`,
-                    background: rsi > 70 ? '#f9f7fd' : rsi < 35 ? '#a910eb' : '#ac10f0'
+                    background: rsi > 70 ? '#f9f7fd' : rsi < 35 ? '#10b981' : '#ac10f0'
                   }}
                 />
               </div>
@@ -452,13 +452,13 @@ export default function StockDetailScreen({
             {/* MACD Card */}
             <div className="inv-tech-card">
               <div className="tech-card-title">MACD (12, 26, 9)</div>
-              <div className="tech-rsi-val" style={{ color: t.macdHistogram >= 0 ? '#900dc8' : '#6b677f' }}>
+              <div className="tech-rsi-val" style={{ color: t.macdHistogram >= 0 ? '#10b981' : '#f43f5e' }}>
                 {t.macdLine >= 0 ? '+' : ''}{t.macdLine.toFixed(2)}
               </div>
               <div className="tech-rsi-label">
                 Signal: {t.macdSignal.toFixed(2)} • Histogram: {t.macdHistogram.toFixed(2)}
               </div>
-              <div className="tech-sub-status" style={{ color: t.macdHistogram >= 0 ? '#900dc8' : '#6b677f' }}>
+              <div className="tech-sub-status" style={{ color: t.macdHistogram >= 0 ? '#10b981' : '#f43f5e' }}>
                 {t.macdHistogram >= 0 ? '✓ Bullish MACD Crossover' : 'Bearish Divergence'}
               </div>
             </div>
@@ -466,13 +466,13 @@ export default function StockDetailScreen({
             {/* Moving Averages Alignment */}
             <div className="inv-tech-card">
               <div className="tech-card-title">Moving Averages (50 / 200 SMA)</div>
-              <div className="tech-rsi-val" style={{ color: '#900dc8' }}>
+              <div className="tech-rsi-val" style={{ color: '#10b981' }}>
                 Golden Cross
               </div>
               <div className="tech-rsi-label">
                 50 SMA ({mask(formatINR(t.sma50))}) &gt; 200 SMA ({mask(formatINR(t.sma200))})
               </div>
-              <div className="tech-sub-status" style={{ color: '#900dc8' }}>
+              <div className="tech-sub-status" style={{ color: '#10b981' }}>
                 ✓ Strong Long-Term Structural Uptrend
               </div>
             </div>
@@ -516,7 +516,7 @@ export default function StockDetailScreen({
                   <div className="sent-bar-track">
                     <div className="sent-bar-fill buy" style={{ width: `${(analystBuys / analystTotal) * 100}%` }} />
                   </div>
-                  <span className="sent-count" style={{ color: '#900dc8' }}>{analystBuys} ({Math.round((analystBuys / analystTotal) * 100)}%)</span>
+                  <span className="sent-count" style={{ color: '#10b981' }}>{analystBuys} ({Math.round((analystBuys / analystTotal) * 100)}%)</span>
                 </div>
 
                 <div className="sentiment-bar-row">
@@ -524,7 +524,7 @@ export default function StockDetailScreen({
                   <div className="sent-bar-track">
                     <div className="sent-bar-fill hold" style={{ width: `${(analystHolds / analystTotal) * 100}%` }} />
                   </div>
-                  <span className="sent-count" style={{ color: '#9406d0' }}>{analystHolds} ({Math.round((analystHolds / analystTotal) * 100)}%)</span>
+                  <span className="sent-count" style={{ color: '#38bdf8' }}>{analystHolds} ({Math.round((analystHolds / analystTotal) * 100)}%)</span>
                 </div>
 
                 <div className="sentiment-bar-row">
@@ -532,7 +532,7 @@ export default function StockDetailScreen({
                   <div className="sent-bar-track">
                     <div className="sent-bar-fill sell" style={{ width: `${(analystSells / analystTotal) * 100}%` }} />
                   </div>
-                  <span className="sent-count" style={{ color: '#6b677f' }}>{analystSells} ({Math.round((analystSells / analystTotal) * 100)}%)</span>
+                  <span className="sent-count" style={{ color: '#f43f5e' }}>{analystSells} ({Math.round((analystSells / analystTotal) * 100)}%)</span>
                 </div>
               </div>
             </div>
@@ -542,11 +542,11 @@ export default function StockDetailScreen({
               <h4 className="sentiment-box-title">Key Catalysts & Risk Factors</h4>
               <div className="catalysts-list">
                 <div className="catalyst-item positive">
-                  <CheckCircle2 size={15} color="#900dc8" />
+                  <CheckCircle2 size={15} color="#10b981" />
                   <span>Market leadership with pricing power and high customer retention.</span>
                 </div>
                 <div className="catalyst-item positive">
-                  <CheckCircle2 size={15} color="#900dc8" />
+                  <CheckCircle2 size={15} color="#10b981" />
                   <span>Strong free cash flow reinvested into high-ROIC growth verticals.</span>
                 </div>
                 <div className="catalyst-item negative">

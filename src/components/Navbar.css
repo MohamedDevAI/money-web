@@ -1,59 +1,113 @@
 /* ==========================================================================
-   NAVBAR COMPONENT STYLES (Navbar.css)
-   Clean, floating frosted white bar on vibrant orange backdrop
+   INSTITUTIONAL TOP SHELL, LIVE TICKER TAPE & NAVBAR (Navbar.css)
    ========================================================================== */
 
-.navbar-header {
+.institutional-top-shell {
   position: sticky;
-  top: 10px;
-  z-index: 50;
-  margin: 10px 16px;
-  padding: 12px 20px;
+  top: 0;
+  z-index: 60;
+  background: rgba(6, 9, 17, 0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+/* Live Market Ticker Tape */
+.market-ticker-tape-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 18px;
+  background: #05080f;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  font-size: 0.74rem;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.ticker-tape-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ticker-stream-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.ticker-stream-toggle.live {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.ticker-stream-toggle.paused {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.ticker-tape-items {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ticker-tape-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tape-sym {
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.tape-ltp {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.tape-chg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+  font-size: 0.71rem;
+}
+
+.ticker-tape-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+/* Main Header Bar */
+.navbar-header {
+  max-width: 1640px;
+  margin: 0 auto;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  overflow: hidden;
-  background: rgba(14, 10, 7, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(249, 115, 22, 0.25);
-  box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.85);
-  border-radius: var(--border-radius-lg);
-  transition: all 0.3s ease;
-}
-
-body[data-app="money"] .navbar-header {
-  background: rgba(11, 9, 20, 0.88);
-  border-color: rgba(168, 85, 247, 0.3);
-  box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.85);
-}
-
-body[data-app="money"] .navbar-header::after {
-  background: linear-gradient(90deg, #e9d5ff, #c084fc, #a855f7, #7c3aed, #c084fc, #e9d5ff);
-}
-
-/* Animated warm orange shimmer accent line along bottom edge */
-.navbar-header::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #fdba74, #f97316, #ea580c, #f97316, #fdba74);
-  background-size: 200% 100%;
-  animation: navbarShimmer 6s linear infinite;
-}
-
-@keyframes navbarShimmer {
-  from {
-    background-position: 0% 0;
-  }
-
-  to {
-    background-position: 200% 0;
-  }
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .navbar-brand {
@@ -63,26 +117,15 @@ body[data-app="money"] .navbar-header::after {
 }
 
 .navbar-brand-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: var(--accent-gradient);
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: var(--glow-primary), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transition: all 0.3s ease;
-}
-
-.navbar-brand:hover .navbar-brand-icon {
-  transform: rotate(-8deg) scale(1.06);
-}
-
-.money-brand-icon {
-  background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 50%, #7c3aed 100%) !important;
-  border: none !important;
-  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
 }
 
 .navbar-brand-title-wrap {
@@ -94,177 +137,87 @@ body[data-app="money"] .navbar-header::after {
 .navbar-brand-title {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   letter-spacing: -0.02em;
   color: #ffffff;
 }
 
-.badge-orange {
-  background: rgba(249, 115, 22, 0.18);
-  color: #fb923c;
-  border: 1px solid rgba(249, 115, 22, 0.35);
-  font-weight: 700;
-}
-
 .navbar-pro-badge {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
 }
 
 .navbar-brand-subtitle {
-  font-size: 0.75rem;
-  color: #a8a29e;
+  font-size: 0.72rem;
+  color: #64748b;
 }
 
-/* Dual Application Switcher Bar */
 .app-switcher-container {
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 
 .app-switcher-tabs {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: #18120b;
-  padding: 5px;
-  border-radius: 14px;
-  border: 1px solid rgba(249, 115, 22, 0.28);
-}
-
-body[data-app="money"] .app-switcher-tabs {
-  background: #161226;
-  border-color: rgba(168, 85, 247, 0.3);
+  background: #0b111e;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .app-switcher-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
-  border-radius: 10px;
-  border: none;
-  background: transparent;
-  color: #fed7aa;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 7px;
+  color: #cbd5e1;
   font-weight: 700;
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   text-decoration: none;
-  transition: all 0.22s ease;
-}
-
-.app-switcher-btn:hover {
-  color: #ffffff;
-  background: rgba(249, 115, 22, 0.18);
-}
-
-body[data-app="money"] .app-switcher-btn {
-  color: #ddd6fe;
-}
-
-body[data-app="money"] .app-switcher-btn:hover {
-  color: #ffffff;
-  background: rgba(168, 85, 247, 0.18);
-}
-
-.app-switcher-btn.active-life-os {
-  background: var(--accent-gradient) !important;
-  color: #ffffff !important;
-  font-weight: 800;
-  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .app-switcher-btn.active-money-os {
-  background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 50%, #7c3aed 100%) !important;
-  color: #ffffff !important;
-  font-weight: 800;
-  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.35);
 }
 
-/* Actions Group */
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-.navbar-status-badge {
-  display: flex;
+.btn-privacy-toggle {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  background: #0e1524;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   padding: 6px 12px;
-  border-radius: 9999px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #cbd5e1;
   font-size: 0.75rem;
-}
-
-.navbar-status-connected {
-  background: rgba(249, 115, 22, 0.15);
-  color: #fb923c;
-  border: 1px solid rgba(249, 115, 22, 0.35);
-}
-
-.navbar-status-local {
-  background: rgba(120, 113, 108, 0.18);
-  color: #d6d3d1;
-  border: 1px solid rgba(120, 113, 108, 0.35);
-}
-
-.navbar-status-label {
   font-weight: 600;
+  transition: var(--transition-smooth);
 }
 
-.navbar-status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  display: inline-block;
+.btn-privacy-toggle:hover {
+  border-color: #06b6d4;
+  color: #ffffff;
 }
 
-.navbar-status-dot-connected {
-  background-color: #ea580c;
-  box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.6);
-  animation: statusPulse 2s infinite;
-}
-
-body[data-app="money"] .navbar-status-connected {
-  background: rgba(168, 85, 247, 0.16) !important;
-  color: #c084fc !important;
-  border: 1px solid rgba(168, 85, 247, 0.35) !important;
-}
-
-body[data-app="money"] .navbar-status-dot-connected {
-  background-color: #a855f7 !important;
-  box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.6) !important;
-  animation: statusPulseMoney 2s infinite !important;
-}
-
-.navbar-status-dot-local {
-  background-color: #a8a29e;
-}
-
-@keyframes statusPulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.55);
-  }
-
-  70% {
-    box-shadow: 0 0 0 7px rgba(234, 88, 12, 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(234, 88, 12, 0);
-  }
-}
-
-@keyframes statusPulseMoney {
-  0% {
-    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.65);
-  }
-
-  70% {
-    box-shadow: 0 0 0 7px rgba(168, 85, 247, 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
-  }
+.backend-health-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  background: #0e1524;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #cbd5e1;
 }
