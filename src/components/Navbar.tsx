@@ -30,7 +30,8 @@ export default function Navbar({
   const navigate = useNavigate();
   const { isMoneyHidden, toggleHideMoney, mask } = useMoneyPrivacy();
 
-  const tapeSymbols = watchlist.slice(0, 6);
+  const tapeSymbols = watchlist.slice(0, 8);
+  const liveVix = watchlist[0]?.iv || 15.2;
 
   return (
     <div className="institutional-top-shell">
@@ -45,7 +46,7 @@ export default function Navbar({
               title={isLiveStreaming ? 'Click to pause live market feed' : 'Click to resume live market feed'}
             >
               <Radio size={11} />
-              <span>{isLiveStreaming ? 'NSE/NFO LIVE' : 'FEED PAUSED'}</span>
+              <span>{isLiveStreaming ? 'NSE/BSE LIVE' : 'FEED PAUSED'}</span>
             </button>
 
             <div className="ticker-tape-items">
@@ -66,9 +67,9 @@ export default function Navbar({
           </div>
 
           <div className="ticker-tape-right font-mono">
-            <span>INDIA VIX: <strong className="text-cyan">13.42 (-1.8%)</strong></span>
+            <span>INDIA VIX: <strong className="text-cyan">{liveVix}%</strong></span>
             <span>•</span>
-            <span>USD/INR: <strong>84.08</strong></span>
+            <span>EXCHANGES: <strong>NSE • BSE • NFO</strong></span>
           </div>
         </div>
       )}

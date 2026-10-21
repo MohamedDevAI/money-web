@@ -50,7 +50,9 @@ export default function OptionsStrategyBuilder({
   const { mask } = useMoneyPrivacy();
 
   const fnOInstruments = useMemo(() => {
-    const live = watchlist.filter((w) => w.exchange === 'NFO' || w.exchange === 'NSE');
+    const live = watchlist.filter(
+      (w) => w.exchange === 'NFO' || w.exchange === 'NSE' || w.exchange === 'BSE'
+    );
     if (live.length > 0) return live;
     // When live watchlist is not yet populated, use metadata shells with 0 LTP
     return DEFAULT_IIFL_INSTRUMENTS.map((m) => ({

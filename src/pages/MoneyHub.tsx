@@ -3,6 +3,7 @@ import {
   ShieldCheck,
   CircleDollarSign,
   TrendingUp,
+  TrendingDown,
   LayoutDashboard,
   Activity,
   Eye,
@@ -12,6 +13,7 @@ import {
   Cpu,
   ShieldAlert,
 } from 'lucide-react';
+import { formatINR, formatPctChange } from '../utils/formatters';
 import { useQueryClient } from '@tanstack/react-query';
 import { investmentApi } from '../services/investmentApi';
 import { tradingService } from '../services/tradingService';
@@ -63,6 +65,7 @@ import TradingRiskAnalytics from '../components/money/trading/TradingRiskAnalyti
 import TradingPerformanceChart from '../components/money/trading/TradingPerformanceChart';
 import TradingPositionsTable from '../components/money/trading/TradingPositionsTable';
 import TradeModal from '../components/money/trading/TradeModal';
+import IIFLConnectModal from '../components/money/trading/IIFLConnectModal';
 
 import '../components/money/money-theme.css';
 import {
@@ -118,6 +121,7 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
   // Modal State for Manual Trade Edit/Create
   const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [isIiflModalOpen, setIsIiflModalOpen] = useState(false);
 
   // Fetch Investment Holdings
   const {
@@ -339,10 +343,10 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
             className={`money-header-health-badge ${
               marketFeed.connectionState.marketDataConnected ? 'guardrail-ok' : 'guardrail-warn'
             }`}
-            onClick={() => marketFeed.triggerManualTick()}
+            onClick={() => setIsIiflModalOpen(true)}
             title={
               marketFeed.connectionState.errorMessage ||
-              'Click to sync IIFL MarketData & Interactive API sessions'
+              'Click to authenticate or manage IIFL Capital Markets API session'
             }
           >
             <Activity
@@ -356,7 +360,7 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
               {marketFeed.connectionState.marketDataConnected
                 ? 'CONNECTED'
                 : marketFeed.connectionState.configured
-                ? 'CONNECTING'
+                ? 'CONNECT 2FA'
                 : 'AWAITING KEYS'}
             </span>
           </span>
@@ -393,6 +397,134 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
           </span>
         </div>
       </div>
+
+      {/* LIVE NSE & BSE BENCHMARK INDICES STRIP (NIFTY 50, SENSEX, BANKNIFTY, BSE LTD) */}
+      {marketFeed.watchlist.length > 0 && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(225px, 1fr))',
+            gap: 12,
+            marginBottom: 18,
+          }}
+        >
+          {marketFeed.watchlist
+            .filter((w) =>
+              ['NIFTY 50', 'SENSEX', 'BANKNIFTY', 'BSE'].includes(w.symbol)
+            )
+            .map((idx) => {
+              const isUp = idx.change >= 0;
+              return (
+                <div
+                  key={idx.symbol}
+                  className="glass-panel"
+                  onClick={() => {
+                    marketFeed.setSelectedSymbol(idx.symbol);
+                    setActiveTab('trading');
+                    setTradingDesk('terminal');
+                  }}
+                  title={`Click to open live ${idx.symbol} candlestick chart & L2 depth`}
+                  style={{
+                    padding: '12px 16px',
+                    cursor: 'pointer',
+                    borderLeft: `3px solid ${isUp ? '#10b981' : '#f43f5e'}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    transition: 'transform 0.15s ease, border-color 0.15s ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          fontSize: '0.88rem',
+                          color: 'var(--text-primary)',
+                          letterSpacing: '0.02em',
+                        }}
+                      >
+                        {idx.symbol}
+                      </span>
+                      <span
+                        className="badge"
+                        style={{
+                          fontSize: '0.65rem',
+                          padding: '1px 6px',
+                          background:
+                            idx.exchange === 'BSE'
+                              ? 'rgba(245, 158, 11, 0.16)'
+                              : 'rgba(6, 182, 212, 0.16)',
+                          color: idx.exchange === 'BSE' ? '#f59e0b' : '#06b6d4',
+                        }}
+                      >
+                        {idx.exchange}
+                      </span>
+                    </div>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}
+                    >
+                      LIVE
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      className={`font-mono ${isUp ? 'text-emerald' : 'text-rose'}`}
+                      style={{ fontSize: '1.22rem', fontWeight: 700 }}
+                    >
+                      {formatINR(idx.ltp)}
+                    </span>
+                    <span
+                      className={`font-mono ${isUp ? 'text-emerald' : 'text-rose'}`}
+                      style={{
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                      }}
+                    >
+                      {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                      {isUp ? '+' : ''}
+                      {idx.change.toFixed(2)} ({formatPctChange(idx.changePct)})
+                    </span>
+                  </div>
+
+                  <div
+                    className="font-mono"
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.7rem',
+                      color: 'var(--text-muted)',
+                      borderTop: '1px solid rgba(148, 163, 184, 0.08)',
+                      paddingTop: 5,
+                    }}
+                  >
+                    <span>O: {formatINR(idx.open)}</span>
+                    <span className="text-emerald">H: {formatINR(idx.high)}</span>
+                    <span className="text-rose">L: {formatINR(idx.low)}</span>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
 
       {/* 3 Primary Workspace Tabs: Wealth Dashboard | Investment Research | Pro Trading Terminal */}
       <div className="money-main-tabs-bar">
@@ -741,6 +873,18 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
         onClose={() => setIsDiagnosticOpen(false)}
         healthResult={healthResult}
         onTogglePillar={handleTogglePillar}
+      />
+
+      {/* 4. IIFL Capital Markets' APIs Live Connection Modal */}
+      <IIFLConnectModal
+        isOpen={isIiflModalOpen}
+        onClose={() => setIsIiflModalOpen(false)}
+        connectionState={marketFeed.connectionState}
+        onAuthenticate={async (params) => {
+          const state = await marketFeed.authenticateManual(params);
+          await Promise.all([refetchHoldings(), refetchTrades()]);
+          return state;
+        }}
       />
     </div>
   );

@@ -1,8 +1,9 @@
 /**
  * Live IIFL Market Feed Hook (100% Pure API Mode)
  *
- * Streams live 1502 Touchline + 5x5 L2 Market Depth quotes and Margin Balance
- * strictly from the IIFL API (`iiflService`). Zero simulated or mock data is used.
+ * Streams live Touchline + 5x5 L2 Market Depth quotes and Margin Balance
+ * strictly from the IIFL Capital Markets' API (`iiflService`).
+ * Zero simulated or mock data is used.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -45,8 +46,23 @@ export function useLiveMarketFeed(intervalMs = 2500) {
     }
   }, []);
 
+  const authenticateManual = useCallback(
+    async (params: {
+      redirectUrlOrAuthCode?: string;
+      clientId?: string;
+      userSessionToken?: string;
+    }) => {
+      const state = await iiflService.authenticateManual(params);
+      setConnectionState(state);
+      if (state.marketDataConnected) {
+        await Promise.all([fetchLiveQuotes(), fetchMarginBalance()]);
+      }
+      return state;
+    },
+    [fetchLiveQuotes, fetchMarginBalance]
+  );
+
   useEffect(() => {
-    // Initialize IIFL MarketData & Interactive sessions and fetch initial live data
     iiflService.initializeSessions().then((state) => {
       setConnectionState(state);
       fetchLiveQuotes();
@@ -77,6 +93,7 @@ export function useLiveMarketFeed(intervalMs = 2500) {
       fetchLiveQuotes();
       fetchMarginBalance();
     },
+    authenticateManual,
     cashAvailable,
     marginUtilized,
     connectionState,

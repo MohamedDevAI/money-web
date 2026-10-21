@@ -18,6 +18,18 @@ export default defineConfig(({ mode }) => {
           secure: true,
           rewrite: (path) => path.replace(/^\/api\/iifl/, ''),
         },
+        '/api/nse-live': {
+          target: 'https://query1.finance.yahoo.com',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/api\/nse-live/, ''),
+        },
+        '/api/mf-live': {
+          target: 'https://api.mfapi.in',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/api\/mf-live/, ''),
+        },
         '/api': {
           target: env.VITE_BACKEND_URL || 'http://localhost:8080',
           changeOrigin: true,
