@@ -1,7 +1,10 @@
 /**
- * Institutional Trading Service for Money OS Pro Trading Terminal.
- * Tracks Open Positions, Trade Blotter, Regulatory Brokerage/Taxes, Equity/Drawdown Curves,
- * Strategy Attribution, and Quant Performance Metrics (Profit Factor, Expectancy, Sharpe, Sortino).
+ * Institutional Trading Service for Money OS Pro Trading Terminal (100% Pure API Mode).
+ *
+ * Fetches and routes trades/positions strictly via:
+ *   1. IIFL Interactive Order & Net Positions API (/interactive/portfolio/positions, /interactive/orders)
+ *   2. Spring Boot + MongoDB Trading Journal API (/api/trading)
+ * Zero mock, seed, or localStorage trade data is used.
  */
 
 import type {
@@ -12,37 +15,11 @@ import type {
 } from '../interface';
 import { calculateBrokerageAndTaxes } from '../domain/brokerageCalculator';
 import { DEFAULT_RISK_CONFIG, loadRiskConfig } from '../domain/riskGuardrails';
-import { SEED_TRADES } from '../domain/seedData';
 import apiClient from './apiClient';
-
-const LOCAL_TRADES_KEY = 'money_os_trades_v2';
-
-function getLocalTrades(): Trade[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_TRADES_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch {
-    // ignore storage errors
-  }
-  saveLocalTrades(SEED_TRADES);
-  return SEED_TRADES;
-}
-
-function saveLocalTrades(trades: Trade[]): void {
-  try {
-    localStorage.setItem(LOCAL_TRADES_KEY, JSON.stringify(trades));
-  } catch {
-    // ignore storage errors
-  }
-}
+import { iiflService } from './iiflService';
 
 /**
- * Enriches a raw trade with computed P&L, brokerage charges, R-Multiple, and R:R ratio.
+ * Enriches a raw API trade with computed P&L, Indian regulatory brokerage charges, R-Multiple, and R:R ratio.
  */
 export function enrichTradeMetrics(tradeData: Partial<Trade> & { entryPrice: number; quantity: number }): Trade {
   const isLong = (tradeData.direction || 'LONG') === 'LONG';
@@ -82,7 +59,7 @@ export function enrichTradeMetrics(tradeData: Partial<Trade> & { entryPrice: num
   const netPnl = Number((grossPnl - charges).toFixed(2));
 
   return {
-    id: tradeData.id || `tr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    id: String(tradeData.id || (tradeData as any)._id || ''),
     symbol: (tradeData.symbol || 'NIFTY').toUpperCase(),
     instrument: tradeData.instrument || 'F&O',
     direction: tradeData.direction || 'LONG',
@@ -117,53 +94,70 @@ export function enrichTradeMetrics(tradeData: Partial<Trade> & { entryPrice: num
 }
 
 export const tradingService = {
+  /**
+   * Fetches all trades & open positions strictly from Backend REST API (/api/trading)
+   * and IIFL Interactive Net Positions API (/interactive/portfolio/positions).
+   */
   getTrades: async (): Promise<Trade[]> => {
+    const merged: Trade[] = [];
+
+    // 1. Fetch from Backend Trading Journal API
     try {
       const { data } = await apiClient.get<Trade[]>('/trading');
-      if (Array.isArray(data) && data.length > 0) {
-        const enriched = data.map((t) => enrichTradeMetrics(t));
-        saveLocalTrades(enriched);
-        return enriched;
+      if (Array.isArray(data)) {
+        merged.push(...data.map((t) => enrichTradeMetrics(t)));
       }
     } catch {
-      // Backend offline or endpoint not mounted — use local institutional ledger
+      // Backend trading journal endpoint offline or empty
     }
-    return getLocalTrades();
+
+    // 2. Fetch live Net Positions from IIFL Interactive API
+    try {
+      const iiflPositions = await iiflService.getNetPositions();
+      for (const pos of iiflPositions) {
+        const enrichedPos = enrichTradeMetrics(pos);
+        const exists = merged.some((m) => m.id === enrichedPos.id);
+        if (!exists) {
+          merged.push(enrichedPos);
+        }
+      }
+    } catch {
+      // IIFL Interactive session not active or returned empty
+    }
+
+    return merged;
   },
 
+  /**
+   * Routes a live order to IIFL Interactive API (if connected) and persists the journal record via `/api/trading`.
+   */
   createTrade: async (tradeData: Omit<Trade, 'id'>): Promise<Trade> => {
-    const newTrade = enrichTradeMetrics(tradeData);
-    const currentLocal = getLocalTrades();
-    saveLocalTrades([newTrade, ...currentLocal]);
+    const prepared = enrichTradeMetrics(tradeData);
 
+    // 1. Route live order to IIFL Interactive Order API
     try {
-      const { data } = await apiClient.post<Trade>('/trading', newTrade);
-      if (data) return enrichTradeMetrics(data);
+      const iiflState = iiflService.getConnectionState();
+      if (iiflState.configured) {
+        await iiflService.placeOrder(tradeData);
+      }
     } catch {
-      // Persisted in local ledger
+      // Proceed to journal persistence
     }
-    return newTrade;
+
+    // 2. Persist trade in Backend REST API
+    const { data } = await apiClient.post<Trade>('/trading', prepared);
+    return enrichTradeMetrics(data || prepared);
   },
 
   updateTrade: async (id: string, updates: Partial<Trade>): Promise<Trade> => {
-    const currentLocal = getLocalTrades();
-    const existing = currentLocal.find((t) => t.id === id);
-    const merged = enrichTradeMetrics({
-      ...(existing || { entryPrice: 100, quantity: 1 }),
+    const { data } = await apiClient.put<Trade>(`/trading/${id}`, updates);
+    return enrichTradeMetrics({
       ...updates,
+      ...(data || {}),
+      entryPrice: Number(data?.entryPrice ?? updates.entryPrice ?? 0),
+      quantity: Number(data?.quantity ?? updates.quantity ?? 1),
       id,
     });
-
-    const nextLocal = currentLocal.map((t) => (t.id === id ? merged : t));
-    saveLocalTrades(nextLocal);
-
-    try {
-      const { data } = await apiClient.put<Trade>(`/trading/${id}`, merged);
-      if (data) return enrichTradeMetrics(data);
-    } catch {
-      // Persisted in local ledger
-    }
-    return merged;
   },
 
   closeTrade: async (id: string, exitPrice: number): Promise<Trade> => {
@@ -176,18 +170,12 @@ export const tradingService = {
   },
 
   deleteTrade: async (id: string): Promise<boolean> => {
-    const currentLocal = getLocalTrades();
-    saveLocalTrades(currentLocal.filter((t) => t.id !== id));
-    try {
-      await apiClient.delete(`/trading/${id}`);
-    } catch {
-      // Removed from local ledger
-    }
+    await apiClient.delete(`/trading/${id}`);
     return true;
   },
 
   /**
-   * Computes comprehensive institutional trading & risk metrics.
+   * Computes comprehensive institutional trading & risk metrics from real API trades.
    */
   computeTradingStats: (trades: Trade[]): TradingStats => {
     const riskConfig = loadRiskConfig() || DEFAULT_RISK_CONFIG;
@@ -280,7 +268,6 @@ export const tradingService = {
       }
     });
 
-    // Consecutive streaks & Drawdown calculation on closed trades
     let maxConsecutiveWins = 0;
     let maxConsecutiveLosses = 0;
     let curWinStreak = 0;
@@ -333,7 +320,7 @@ export const tradingService = {
 
     const totalClosed = winCount + lossCount;
     const winRate = totalClosed > 0 ? Number(((winCount / totalClosed) * 100).toFixed(1)) : 0;
-    const avgRiskReward = rrCount > 0 ? Number((rrSum / rrCount).toFixed(2)) : 2.0;
+    const avgRiskReward = rrCount > 0 ? Number((rrSum / rrCount).toFixed(2)) : 0;
     const avgWin = winCount > 0 ? Math.round(grossWins / winCount) : 0;
     const avgLoss = lossCount > 0 ? Math.round(grossLosses / lossCount) : 0;
     const profitFactor =
@@ -348,7 +335,6 @@ export const tradingService = {
     const expectancy = Math.round(winProb * avgWin - lossProb * avgLoss);
     const expectancyR = rMultipleCount > 0 ? Number((rMultipleSum / rMultipleCount).toFixed(2)) : 0;
 
-    // Sharpe & Sortino on trade returns
     let sharpeRatio = 0;
     let sortinoRatio = 0;
     if (returnsArray.length >= 2) {
@@ -387,7 +373,7 @@ export const tradingService = {
         winCount: s.wins,
         winRate: s.count > 0 ? Number(((s.wins / s.count) * 100).toFixed(1)) : 0,
         totalPnl: Math.round(s.pnl),
-        avgRMultiple: s.count > 0 ? Number((s.rSum / s.count).toFixed(2)) : 0,
+        avgRMultiple: s.count > 0 ? Number((s.rSum / s.count) * 100 / 100) : 0,
         profitFactor:
           s.grossLoss > 0
             ? Number((s.grossWin / s.grossLoss).toFixed(2))
@@ -470,7 +456,7 @@ export const tradingService = {
       runningGross += gross;
       runningNet += gross - charges;
       if (runningGross > peak) peak = runningGross;
-      const dd = runningGross - peak; // <= 0
+      const dd = runningGross - peak;
 
       const label = (t.exitDate || t.entryDate).split('T')[0];
       points.push({

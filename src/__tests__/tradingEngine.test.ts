@@ -9,17 +9,12 @@ import {
   analyzeOptionStrategy,
   buildStrategyPreset,
   computeBlackScholes,
-  generateOptionChain,
 } from '../domain/optionsEngine';
-import {
-  generateOHLCSeries,
-  generateOrderBookDepth,
-  INITIAL_WATCHLIST,
-} from '../domain/marketSimulator';
+import { computeTechnicalOverlays, RawApiCandle } from '../domain/technicalIndicators';
 import { tradingService } from '../services/tradingService';
-import { SEED_TRADES } from '../domain/seedData';
+import type { Trade } from '../interface';
 
-describe('Institutional Trading & Quantitative Engines', () => {
+describe('Institutional Trading & Quantitative Engines (Pure API Mode)', () => {
   it('calculates Indian F&O and Equity brokerage, STT, GST, and breakeven accurately', () => {
     const fnOResult = calculateBrokerageAndTaxes({
       instrument: 'F&O',
@@ -56,7 +51,28 @@ describe('Institutional Trading & Quantitative Engines', () => {
   });
 
   it('evaluates pre-trade risk guardrails and blocks oversized risk per trade', () => {
-    const safeEval = evaluateRiskGuardrails(DEFAULT_RISK_CONFIG, SEED_TRADES, {
+    const sampleApiTrades: Trade[] = [
+      {
+        id: 'api-tr-1',
+        symbol: 'NIFTY 50',
+        instrument: 'F&O',
+        direction: 'LONG',
+        tradeType: 'INTRADAY',
+        entryPrice: 24800,
+        currentPrice: 24920,
+        exitPrice: 24920,
+        stopLoss: 24740,
+        targetPrice: 24950,
+        quantity: 50,
+        entryDate: new Date().toISOString(),
+        exitDate: new Date().toISOString(),
+        status: 'CLOSED',
+        strategy: 'ORB',
+        realizedPnl: 6000,
+      },
+    ];
+
+    const safeEval = evaluateRiskGuardrails(DEFAULT_RISK_CONFIG, sampleApiTrades, {
       entryPrice: 100,
       stopLoss: 90,
       targetPrice: 125,
@@ -65,7 +81,7 @@ describe('Institutional Trading & Quantitative Engines', () => {
     });
     expect(safeEval.canExecute).toBe(true);
 
-    const oversizedEval = evaluateRiskGuardrails(DEFAULT_RISK_CONFIG, SEED_TRADES, {
+    const oversizedEval = evaluateRiskGuardrails(DEFAULT_RISK_CONFIG, sampleApiTrades, {
       entryPrice: 1000,
       stopLoss: 900, // 100 risk/unit
       targetPrice: 1200,
@@ -95,26 +111,66 @@ describe('Institutional Trading & Quantitative Engines', () => {
     expect(analysis.payoffCurve.length).toBeGreaterThan(50);
     expect(analysis.breakevens.length).toBe(2);
     expect(analysis.estimatedMargin).toBeGreaterThan(0);
-
-    const chain = generateOptionChain(24850, 50, 14, 7);
-    expect(chain.rows).toHaveLength(13);
-    expect(chain.pcr).toBeGreaterThan(0);
   });
 
-  it('generates multi-timeframe OHLCV series, L2 Order Book DOM, and institutional trading stats', () => {
-    const inst = INITIAL_WATCHLIST[0];
-    const candles = generateOHLCSeries(inst, '15m', 30);
-    expect(candles).toHaveLength(30);
-    expect(candles[candles.length - 1].close).toBe(inst.ltp);
+  it('computes technical indicators (VWAP, EMA20, Bollinger, RSI, MACD) from raw API OHLCV candles and computes trading stats', () => {
+    const rawApiCandles: RawApiCandle[] = Array.from({ length: 25 }, (_, idx) => ({
+      timestamp: Date.now() - (25 - idx) * 60000,
+      open: 24800 + idx * 5,
+      high: 24815 + idx * 5,
+      low: 24790 + idx * 5,
+      close: 24810 + idx * 5,
+      volume: 12000 + idx * 500,
+    }));
 
-    const dom = generateOrderBookDepth(inst);
-    expect(dom.bids).toHaveLength(5);
-    expect(dom.asks).toHaveLength(5);
-    expect(dom.spread).toBeGreaterThan(0);
+    const enrichedCandles = computeTechnicalOverlays(rawApiCandles, false);
+    expect(enrichedCandles).toHaveLength(25);
+    expect(enrichedCandles[24].close).toBe(24810 + 24 * 5);
+    expect(enrichedCandles[24].vwap).toBeGreaterThan(0);
+    expect(enrichedCandles[24].rsi14).toBeGreaterThanOrEqual(50);
 
-    const stats = tradingService.computeTradingStats(SEED_TRADES);
-    expect(stats.totalTrades).toBe(SEED_TRADES.length);
-    expect(stats.profitFactor).toBeGreaterThan(1.5);
-    expect(stats.byStrategy.length).toBeGreaterThan(0);
+    const apiTrades: Trade[] = [
+      {
+        id: 't1',
+        symbol: 'RELIANCE',
+        instrument: 'EQUITY',
+        direction: 'LONG',
+        tradeType: 'SWING',
+        entryPrice: 2900,
+        currentPrice: 3020,
+        exitPrice: 3020,
+        stopLoss: 2850,
+        targetPrice: 3050,
+        quantity: 100,
+        entryDate: '2025-02-01T09:30:00Z',
+        exitDate: '2025-02-03T15:15:00Z',
+        status: 'CLOSED',
+        strategy: 'Breakout',
+        realizedPnl: 12000,
+      },
+      {
+        id: 't2',
+        symbol: 'HDFCBANK',
+        instrument: 'EQUITY',
+        direction: 'LONG',
+        tradeType: 'SWING',
+        entryPrice: 1700,
+        currentPrice: 1680,
+        exitPrice: 1680,
+        stopLoss: 1680,
+        targetPrice: 1760,
+        quantity: 100,
+        entryDate: '2025-02-04T09:30:00Z',
+        exitDate: '2025-02-05T14:15:00Z',
+        status: 'CLOSED',
+        strategy: 'Breakout',
+        realizedPnl: -2000,
+      },
+    ];
+
+    const stats = tradingService.computeTradingStats(apiTrades);
+    expect(stats.totalTrades).toBe(2);
+    expect(stats.profitFactor).toBe(6);
+    expect(stats.byStrategy.length).toBe(1);
   });
 });

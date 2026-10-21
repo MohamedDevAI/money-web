@@ -1,122 +1,84 @@
 /**
- * Investment Holdings API Service
+ * Investment Holdings API Service (100% Pure API Mode)
  *
- * Backend target: Spring Boot + MongoDB Atlas
- *   Database:    money  (via @Qualifier("moneyTemplate") MongoTemplate)
- *   Collection:  investment_holdings
- *   Base path:   /api/investment-holdings
- * Includes resilient hybrid local storage + institutional seed data fallback.
+ * Fetches and mutates holdings strictly via:
+ *   1. Spring Boot + MongoDB Backend (/api/investment-holdings)
+ *   2. IIFL Interactive Demat Portfolio API (/interactive/portfolio/holdings)
+ * Zero mock, seed, or localStorage data is used.
  */
 
 import apiClient from './apiClient';
+import { iiflService } from './iiflService';
 import { CategoryStats, InvestmentCategory, InvestmentHolding, PortfolioStats } from '../interface';
-import { SEED_HOLDINGS } from '../domain/seedData';
 
 const ENDPOINT = '/investment-holdings';
-const LOCAL_HOLDINGS_KEY = 'money_os_holdings_v2';
 
 const normalizeHolding = (raw: any): InvestmentHolding => {
-  const id = raw._id || raw.id || `inv-${Date.now()}`;
+  const id = raw._id || raw.id || '';
   return {
     ...raw,
-    id: typeof id === 'object' ? String(id) : id,
-    _id: typeof id === 'object' ? String(id) : id,
+    id: typeof id === 'object' ? String(id) : String(id),
+    _id: typeof id === 'object' ? String(id) : String(id),
   } as InvestmentHolding;
 };
 
-function getLocalHoldings(): InvestmentHolding[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_HOLDINGS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map(normalizeHolding);
-      }
-    }
-  } catch {
-    // ignore storage errors
-  }
-  saveLocalHoldings(SEED_HOLDINGS);
-  return SEED_HOLDINGS;
-}
-
-function saveLocalHoldings(holdings: InvestmentHolding[]): void {
-  try {
-    localStorage.setItem(LOCAL_HOLDINGS_KEY, JSON.stringify(holdings));
-  } catch {
-    // ignore storage errors
-  }
-}
-
 export const investmentApi = {
+  /**
+   * Fetches live holdings strictly from Backend REST API and IIFL Demat Holdings API.
+   */
   getHoldings: async (): Promise<InvestmentHolding[]> => {
+    const results: InvestmentHolding[] = [];
+
+    // 1. Fetch from Backend API (/api/investment-holdings)
     try {
-      const { data } = await apiClient.get<any[]>(ENDPOINT, { timeout: 4000 });
-      if (Array.isArray(data) && data.length > 0) {
-        const normalized = data.map(normalizeHolding);
-        saveLocalHoldings(normalized);
-        return normalized;
+      const { data } = await apiClient.get<any[]>(ENDPOINT);
+      if (Array.isArray(data)) {
+        results.push(...data.map(normalizeHolding));
       }
     } catch {
-      // Backend offline — serve local institutional holdings
+      // Backend endpoint unavailable or returned empty
     }
-    return getLocalHoldings();
+
+    // 2. Fetch live Demat Equity holdings from IIFL Interactive API
+    try {
+      const iiflHoldings = await iiflService.getDematHoldings();
+      for (const h of iiflHoldings) {
+        const alreadyExists = results.some(
+          (r) =>
+            (r.ticker && h.ticker && r.ticker.toUpperCase() === h.ticker.toUpperCase()) ||
+            r.id === h.id
+        );
+        if (!alreadyExists) {
+          results.push(h);
+        }
+      }
+    } catch {
+      // IIFL Interactive session not active or returned empty
+    }
+
+    return results;
   },
 
   createHolding: async (
     holding: Omit<InvestmentHolding, 'id' | '_id' | 'createdAt' | 'updatedAt'>
   ): Promise<InvestmentHolding> => {
-    const newHolding = normalizeHolding({
+    const { data } = await apiClient.post<any>(ENDPOINT, {
       ...holding,
-      id: `inv-${Date.now()}`,
       currency: holding.currency || 'INR',
-      createdAt: new Date().toISOString(),
     });
-
-    const current = getLocalHoldings();
-    saveLocalHoldings([newHolding, ...current]);
-
-    try {
-      const { data } = await apiClient.post<any>(ENDPOINT, newHolding);
-      if (data) return normalizeHolding(data);
-    } catch {
-      // Stored locally
-    }
-    return newHolding;
+    return normalizeHolding(data);
   },
 
   updateHolding: async (
     id: string,
     updates: Partial<InvestmentHolding>
   ): Promise<InvestmentHolding | null> => {
-    const current = getLocalHoldings();
-    const existing = current.find((h) => h.id === id || h._id === id);
-    const updated = normalizeHolding({
-      ...(existing || {}),
-      ...updates,
-      id,
-      updatedAt: new Date().toISOString(),
-    });
-
-    saveLocalHoldings(current.map((h) => (h.id === id || h._id === id ? updated : h)));
-
-    try {
-      const { data } = await apiClient.put<any>(`${ENDPOINT}/${id}`, updated);
-      if (data) return normalizeHolding(data);
-    } catch {
-      // Stored locally
-    }
-    return updated;
+    const { data } = await apiClient.put<any>(`${ENDPOINT}/${id}`, updates);
+    return data ? normalizeHolding(data) : null;
   },
 
   deleteHolding: async (id: string): Promise<void> => {
-    const current = getLocalHoldings();
-    saveLocalHoldings(current.filter((h) => h.id !== id && h._id !== id));
-    try {
-      await apiClient.delete(`${ENDPOINT}/${id}`);
-    } catch {
-      // Deleted locally
-    }
+    await apiClient.delete(`${ENDPOINT}/${id}`);
   },
 
   computePortfolioStats: (holdings: InvestmentHolding[]): PortfolioStats => {
@@ -190,9 +152,8 @@ export const investmentApi = {
 
   getFlaggedHoldings: (holdings: InvestmentHolding[]): InvestmentHolding[] => {
     return holdings.filter((h) => {
-      const returnPct = h.buyPrice > 0
-        ? ((h.currentPrice - h.buyPrice) / h.buyPrice) * 100
-        : 0;
+      const returnPct =
+        h.buyPrice > 0 ? ((h.currentPrice - h.buyPrice) / h.buyPrice) * 100 : 0;
       return (
         h.verdict === 'Sell' ||
         (h.confidence !== undefined && h.confidence < 40) ||

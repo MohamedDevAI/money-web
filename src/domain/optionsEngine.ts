@@ -5,7 +5,6 @@
  */
 
 import {
-  OptionChainStrikeRow,
   OptionGreeks,
   OptionLeg,
   OptionStrategyAnalysis,
@@ -354,87 +353,4 @@ export function buildStrategyPreset(
         makeLeg(2, 'PE', 'BUY', atm - step * 2),
       ];
   }
-}
-
-/**
- * Generates a realistic Option Chain around spot with OI, Change in OI, Volume, IV, LTP, Delta, PCR & Max Pain.
- */
-export function generateOptionChain(
-  spot: number,
-  step: number,
-  baseIv = 14.5,
-  daysToExpiry = 7
-): {
-  rows: OptionChainStrikeRow[];
-  pcr: number;
-  maxPainStrike: number;
-  totalCallOi: number;
-  totalPutOi: number;
-} {
-  const atm = Math.round(spot / step) * step;
-  const rows: OptionChainStrikeRow[] = [];
-  let totalCallOi = 0;
-  let totalPutOi = 0;
-
-  for (let i = -6; i <= 6; i++) {
-    const strike = atm + i * step;
-    const distFromAtm = Math.abs(i);
-    // Volatility smile: OTM options have slightly higher IV
-    const smileIv = Number((baseIv + distFromAtm * 0.45).toFixed(1));
-
-    const callBs = computeBlackScholes({
-      spot,
-      strike,
-      daysToExpiry,
-      ivPct: smileIv,
-      optionType: 'CE',
-    });
-    const putBs = computeBlackScholes({
-      spot,
-      strike,
-      daysToExpiry,
-      ivPct: smileIv,
-      optionType: 'PE',
-    });
-
-    // Realistic OI distribution: Call OI peaks above ATM, Put OI peaks below ATM
-    const callWeight = i >= 0 ? Math.max(0.25, 1.35 - Math.abs(i - 2) * 0.22) : 0.25;
-    const putWeight = i <= 0 ? Math.max(0.25, 1.4 - Math.abs(i + 2) * 0.22) : 0.25;
-
-    const seed = (strike % 97) / 97;
-    const callOi = Math.round((85000 + seed * 45000) * callWeight);
-    const putOi = Math.round((92000 + (1 - seed) * 48000) * putWeight);
-    const callOiChange = Math.round(callOi * (i >= 1 ? 0.14 : -0.06));
-    const putOiChange = Math.round(putOi * (i <= -1 ? 0.16 : -0.05));
-
-    totalCallOi += callOi;
-    totalPutOi += putOi;
-
-    rows.push({
-      strike,
-      isAtm: i === 0,
-      callOi,
-      callOiChange,
-      callVolume: Math.round(callOi * 1.85),
-      callIv: smileIv,
-      callLtp: callBs.price,
-      callDelta: callBs.greeks.delta,
-      putLtp: putBs.price,
-      putDelta: putBs.greeks.delta,
-      putIv: Number((smileIv + 0.3).toFixed(1)),
-      putVolume: Math.round(putOi * 1.75),
-      putOiChange,
-      putOi,
-    });
-  }
-
-  const pcr = totalCallOi > 0 ? Number((totalPutOi / totalCallOi).toFixed(2)) : 1.0;
-
-  return {
-    rows,
-    pcr,
-    maxPainStrike: atm,
-    totalCallOi,
-    totalPutOi,
-  };
 }

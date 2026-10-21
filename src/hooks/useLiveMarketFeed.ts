@@ -1,25 +1,68 @@
+/**
+ * Live IIFL Market Feed Hook (100% Pure API Mode)
+ *
+ * Streams live 1502 Touchline + 5x5 L2 Market Depth quotes and Margin Balance
+ * strictly from the IIFL API (`iiflService`). Zero simulated or mock data is used.
+ */
+
 import { useState, useEffect, useCallback } from 'react';
-import { INITIAL_WATCHLIST, simulateMarketTick } from '../domain/marketSimulator';
+import { iiflService, IIFLConnectionState } from '../services/iiflService';
 import { WatchlistInstrument } from '../interface';
 
-export function useLiveMarketFeed(intervalMs = 2200) {
-  const [watchlist, setWatchlist] = useState<WatchlistInstrument[]>(INITIAL_WATCHLIST);
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(INITIAL_WATCHLIST[0].symbol);
+export function useLiveMarketFeed(intervalMs = 2500) {
+  const [watchlist, setWatchlist] = useState<WatchlistInstrument[]>([]);
+  const [selectedSymbol, setSelectedSymbol] = useState<string>('NIFTY 50');
   const [isLiveStreaming, setIsLiveStreaming] = useState<boolean>(true);
+  const [cashAvailable, setCashAvailable] = useState<number>(0);
+  const [marginUtilized, setMarginUtilized] = useState<number>(0);
+  const [connectionState, setConnectionState] = useState<IIFLConnectionState>(() =>
+    iiflService.getConnectionState()
+  );
 
-  const triggerManualTick = useCallback(() => {
-    setWatchlist((prev) => simulateMarketTick(prev));
+  const fetchLiveQuotes = useCallback(async () => {
+    try {
+      const quotes = await iiflService.getLiveWatchlistQuotes();
+      if (Array.isArray(quotes) && quotes.length > 0) {
+        setWatchlist(quotes);
+        setSelectedSymbol((prev) =>
+          quotes.some((q) => q.symbol === prev) ? prev : quotes[0].symbol
+        );
+      }
+    } catch {
+      // IIFL API not yet authenticated or reachable
+    } finally {
+      setConnectionState(iiflService.getConnectionState());
+    }
   }, []);
+
+  const fetchMarginBalance = useCallback(async () => {
+    try {
+      const bal = await iiflService.getMarginBalance();
+      setCashAvailable(bal.cashAvailable);
+      setMarginUtilized(bal.marginUtilized);
+    } catch {
+      // Ignore when unauthenticated
+    }
+  }, []);
+
+  useEffect(() => {
+    // Initialize IIFL MarketData & Interactive sessions and fetch initial live data
+    iiflService.initializeSessions().then((state) => {
+      setConnectionState(state);
+      fetchLiveQuotes();
+      fetchMarginBalance();
+    });
+  }, [fetchLiveQuotes, fetchMarginBalance]);
 
   useEffect(() => {
     if (!isLiveStreaming) return;
     const timer = setInterval(() => {
-      setWatchlist((prev) => simulateMarketTick(prev));
+      fetchLiveQuotes();
     }, intervalMs);
     return () => clearInterval(timer);
-  }, [isLiveStreaming, intervalMs]);
+  }, [isLiveStreaming, intervalMs, fetchLiveQuotes]);
 
-  const activeInstrument =
+  const activeInstrument: WatchlistInstrument | undefined =
     watchlist.find((w) => w.symbol === selectedSymbol) || watchlist[0];
 
   return {
@@ -30,6 +73,12 @@ export function useLiveMarketFeed(intervalMs = 2200) {
     isLiveStreaming,
     setIsLiveStreaming,
     toggleLiveStreaming: () => setIsLiveStreaming((prev) => !prev),
-    triggerManualTick,
+    triggerManualTick: () => {
+      fetchLiveQuotes();
+      fetchMarginBalance();
+    },
+    cashAvailable,
+    marginUtilized,
+    connectionState,
   };
 }

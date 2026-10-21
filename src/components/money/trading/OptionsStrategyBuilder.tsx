@@ -16,18 +16,19 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  WifiOff,
   Zap,
 } from 'lucide-react';
 import {
   analyzeOptionStrategy,
   buildStrategyPreset,
   computeBlackScholes,
-  generateOptionChain,
   StrategyPresetId,
 } from '../../../domain/optionsEngine';
+import { iiflService, DEFAULT_IIFL_INSTRUMENTS } from '../../../services/iiflService';
 import { formatINR, formatINRCompact } from '../../../utils/formatters';
 import { useMoneyPrivacy } from '../../../context/MoneyPrivacyContext';
-import type { OptionLeg, Trade, WatchlistInstrument } from '../../../interface';
+import type { OptionChainStrikeRow, OptionLeg, Trade, WatchlistInstrument } from '../../../interface';
 
 interface OptionsStrategyBuilderProps {
   watchlist: WatchlistInstrument[];
@@ -48,10 +49,35 @@ export default function OptionsStrategyBuilder({
 }: OptionsStrategyBuilderProps) {
   const { mask } = useMoneyPrivacy();
 
-  const fnOInstruments = useMemo(
-    () => watchlist.filter((w) => w.exchange === 'NFO' || w.exchange === 'NSE'),
-    [watchlist]
-  );
+  const fnOInstruments = useMemo(() => {
+    const live = watchlist.filter((w) => w.exchange === 'NFO' || w.exchange === 'NSE');
+    if (live.length > 0) return live;
+    // When live watchlist is not yet populated, use metadata shells with 0 LTP
+    return DEFAULT_IIFL_INSTRUMENTS.map((m) => ({
+      symbol: m.symbol,
+      name: m.name,
+      exchange: m.exchange,
+      instrument: m.instrument,
+      sector: m.sector,
+      ltp: 0,
+      prevClose: 0,
+      open: 0,
+      high: 0,
+      low: 0,
+      change: 0,
+      changePct: 0,
+      volume: 0,
+      vwap: 0,
+      lotSize: m.lotSize,
+      atr14: 0,
+      rsi14: 50,
+      iv: 15,
+      pcr: 1,
+      bid: 0,
+      ask: 0,
+      tickDirection: 'flat' as const,
+    }));
+  }, [watchlist]);
 
   const [selectedSymbol, setSelectedSymbol] = useState<string>(
     fnOInstruments[0]?.symbol || 'NIFTY 50'
@@ -66,26 +92,31 @@ export default function OptionsStrategyBuilder({
   );
 
   const strikeStep = useMemo(() => {
-    if (!underlying) return 50;
+    if (!underlying || underlying.ltp <= 0) return 50;
     if (underlying.ltp > 40000) return 100;
     if (underlying.ltp > 15000) return 50;
     if (underlying.ltp > 2000) return 20;
     return 10;
   }, [underlying]);
 
-  const [legs, setLegs] = useState<OptionLeg[]>(() =>
-    buildStrategyPreset(
-      'iron_condor',
-      underlying?.ltp || 24850,
-      strikeStep,
-      underlying?.lotSize || 25,
-      underlying?.iv || 14.0
-    )
-  );
+  const [legs, setLegs] = useState<OptionLeg[]>([]);
+  const [optionChain, setOptionChain] = useState<{
+    rows: OptionChainStrikeRow[];
+    pcr: number;
+    maxPainStrike: number;
+    totalCallOi: number;
+    totalPutOi: number;
+  }>({
+    rows: [],
+    pcr: 0,
+    maxPainStrike: 0,
+    totalCallOi: 0,
+    totalPutOi: 0,
+  });
 
-  // Rebuild preset when underlying symbol changes
+  // Rebuild preset when underlying live spot becomes available or symbol changes
   useEffect(() => {
-    if (!underlying) return;
+    if (!underlying || underlying.ltp <= 0) return;
     setLegs(
       buildStrategyPreset(
         activePreset,
@@ -95,10 +126,33 @@ export default function OptionsStrategyBuilder({
         underlying.iv
       )
     );
-  }, [selectedSymbol]);
+  }, [selectedSymbol, underlying?.ltp]);
+
+  // Fetch live Option Chain strictly from IIFL MarketData API
+  useEffect(() => {
+    if (!underlying || underlying.ltp <= 0) {
+      setOptionChain({ rows: [], pcr: 0, maxPainStrike: 0, totalCallOi: 0, totalPutOi: 0 });
+      return;
+    }
+    let cancelled = false;
+    iiflService
+      .getOptionChain(underlying.symbol, underlying.ltp, strikeStep, daysToExpiry)
+      .then((res) => {
+        if (!cancelled) setOptionChain(res);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOptionChain({ rows: [], pcr: 0, maxPainStrike: 0, totalCallOi: 0, totalPutOi: 0 });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [underlying?.symbol, underlying?.ltp, strikeStep, daysToExpiry]);
 
   const handleSelectPreset = (presetId: StrategyPresetId) => {
     setActivePreset(presetId);
+    if (!underlying || underlying.ltp <= 0) return;
     setLegs(
       buildStrategyPreset(
         presetId,
@@ -136,7 +190,10 @@ export default function OptionsStrategyBuilder({
       prev.map((leg) => {
         if (leg.id !== id) return leg;
         const merged = { ...leg, ...updates };
-        if (updates.strike !== undefined || updates.optionType !== undefined || updates.iv !== undefined) {
+        if (
+          underlying.ltp > 0 &&
+          (updates.strike !== undefined || updates.optionType !== undefined || updates.iv !== undefined)
+        ) {
           const bs = computeBlackScholes({
             spot: underlying.ltp,
             strike: merged.strike,
@@ -156,13 +213,8 @@ export default function OptionsStrategyBuilder({
   };
 
   const analysis = useMemo(
-    () => analyzeOptionStrategy(underlying.ltp, legs),
-    [underlying.ltp, legs]
-  );
-
-  const optionChain = useMemo(
-    () => generateOptionChain(underlying.ltp, strikeStep, underlying.iv, daysToExpiry),
-    [underlying.ltp, strikeStep, underlying.iv, daysToExpiry]
+    () => analyzeOptionStrategy(underlying?.ltp || 0, legs),
+    [underlying?.ltp, legs]
   );
 
   const handleDeployBasket = async () => {
@@ -196,7 +248,7 @@ export default function OptionsStrategyBuilder({
         .join(' | ')}`,
     });
 
-    setDeployMessage(`Basket "${summaryLabel}" routed to Open Positions Blotter!`);
+    setDeployMessage(`Basket "${summaryLabel}" routed via IIFL Interactive API!`);
     setTimeout(() => setDeployMessage(null), 4000);
   };
 
@@ -218,7 +270,7 @@ export default function OptionsStrategyBuilder({
                 <Sparkles size={12} /> F&O DERIVATIVES & GREEKS ENGINE
               </span>
               <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Black-Scholes Pricing • SPAN Margin Simulator
+                IIFL Option Chain • Black-Scholes Pricing
               </span>
             </div>
             <h3 className="options-lab-title">
@@ -236,7 +288,7 @@ export default function OptionsStrategyBuilder({
               >
                 {fnOInstruments.map((inst) => (
                   <option key={inst.symbol} value={inst.symbol}>
-                    {inst.symbol} (₹{inst.ltp})
+                    {inst.symbol} {inst.ltp > 0 ? `(₹${inst.ltp})` : '(API Standby)'}
                   </option>
                 ))}
               </select>
@@ -265,6 +317,7 @@ export default function OptionsStrategyBuilder({
                 type="button"
                 className="btn btn-primary"
                 onClick={handleDeployBasket}
+                disabled={legs.length === 0}
                 style={{ alignSelf: 'flex-end', height: 38 }}
               >
                 <Zap size={14} /> Deploy Basket Order
@@ -388,7 +441,7 @@ export default function OptionsStrategyBuilder({
                 handleAddLegFromChain(
                   'CE',
                   'BUY',
-                  Math.round(underlying.ltp / strikeStep) * strikeStep,
+                  underlying.ltp > 0 ? Math.round(underlying.ltp / strikeStep) * strikeStep : 24000,
                   125,
                   underlying.iv
                 )
@@ -399,85 +452,91 @@ export default function OptionsStrategyBuilder({
           </div>
 
           <div className="options-legs-list">
-            {legs.map((leg) => (
-              <div key={leg.id} className="option-leg-row">
-                <button
-                  type="button"
-                  className={`leg-side-badge ${leg.action === 'BUY' ? 'buy' : 'sell'}`}
-                  onClick={() =>
-                    handleUpdateLeg(leg.id, {
-                      action: leg.action === 'BUY' ? 'SELL' : 'BUY',
-                    })
-                  }
-                  title="Click to toggle BUY / SELL"
-                >
-                  {leg.action}
-                </button>
-
-                <select
-                  value={leg.optionType}
-                  onChange={(e) =>
-                    handleUpdateLeg(leg.id, {
-                      optionType: e.target.value as 'CE' | 'PE' | 'FUT',
-                    })
-                  }
-                  className="leg-type-select font-mono"
-                >
-                  <option value="CE">CE (Call)</option>
-                  <option value="PE">PE (Put)</option>
-                  <option value="FUT">FUT</option>
-                </select>
-
-                <div className="leg-input-group">
-                  <label>Strike</label>
-                  <input
-                    type="number"
-                    step={strikeStep}
-                    value={leg.strike}
-                    onChange={(e) =>
-                      handleUpdateLeg(leg.id, { strike: Number(e.target.value) })
-                    }
-                    className="font-mono"
-                  />
-                </div>
-
-                <div className="leg-input-group">
-                  <label>Lots ({leg.lotSize})</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={leg.lots}
-                    onChange={(e) =>
-                      handleUpdateLeg(leg.id, { lots: Math.max(1, Number(e.target.value)) })
-                    }
-                    className="font-mono"
-                  />
-                </div>
-
-                <div className="leg-input-group">
-                  <label>Premium (₹)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={leg.premium}
-                    onChange={(e) =>
-                      handleUpdateLeg(leg.id, { premium: Math.max(0.5, Number(e.target.value)) })
-                    }
-                    className="font-mono"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  className="leg-delete-btn"
-                  onClick={() => handleRemoveLeg(leg.id)}
-                  title="Remove leg"
-                >
-                  <Trash2 size={14} />
-                </button>
+            {legs.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Add an option leg manually or connect IIFL MarketData API to auto-populate strategy strikes around live spot.
               </div>
-            ))}
+            ) : (
+              legs.map((leg) => (
+                <div key={leg.id} className="option-leg-row">
+                  <button
+                    type="button"
+                    className={`leg-side-badge ${leg.action === 'BUY' ? 'buy' : 'sell'}`}
+                    onClick={() =>
+                      handleUpdateLeg(leg.id, {
+                        action: leg.action === 'BUY' ? 'SELL' : 'BUY',
+                      })
+                    }
+                    title="Click to toggle BUY / SELL"
+                  >
+                    {leg.action}
+                  </button>
+
+                  <select
+                    value={leg.optionType}
+                    onChange={(e) =>
+                      handleUpdateLeg(leg.id, {
+                        optionType: e.target.value as 'CE' | 'PE' | 'FUT',
+                      })
+                    }
+                    className="leg-type-select font-mono"
+                  >
+                    <option value="CE">CE (Call)</option>
+                    <option value="PE">PE (Put)</option>
+                    <option value="FUT">FUT</option>
+                  </select>
+
+                  <div className="leg-input-group">
+                    <label>Strike</label>
+                    <input
+                      type="number"
+                      step={strikeStep}
+                      value={leg.strike}
+                      onChange={(e) =>
+                        handleUpdateLeg(leg.id, { strike: Number(e.target.value) })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
+
+                  <div className="leg-input-group">
+                    <label>Lots ({leg.lotSize})</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={leg.lots}
+                      onChange={(e) =>
+                        handleUpdateLeg(leg.id, { lots: Math.max(1, Number(e.target.value)) })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
+
+                  <div className="leg-input-group">
+                    <label>Premium (₹)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={leg.premium}
+                      onChange={(e) =>
+                        handleUpdateLeg(leg.id, { premium: Math.max(0.5, Number(e.target.value)) })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    className="leg-delete-btn"
+                    onClick={() => handleRemoveLeg(leg.id)}
+                    title="Remove leg"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -495,88 +554,103 @@ export default function OptionsStrategyBuilder({
           </div>
 
           <div style={{ width: '100%', height: 290, marginTop: 8 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                data={analysis.payoffCurve}
-                margin={{ top: 10, right: 20, left: 10, bottom: 0 }}
+            {analysis.payoffCurve.length === 0 ? (
+              <div
+                style={{
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.82rem',
+                }}
               >
-                <defs>
-                  <linearGradient id="payoffProfitGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.08)" />
-                <XAxis
-                  dataKey="spot"
-                  stroke="#64748b"
-                  fontSize={11}
-                  tickLine={false}
-                  tickFormatter={(v) => `₹${v}`}
-                />
-                <YAxis
-                  stroke="#64748b"
-                  fontSize={11}
-                  tickLine={false}
-                  tickFormatter={(v) => formatINRCompact(v)}
-                />
-                <ReferenceLine y={0} stroke="rgba(255, 255, 255, 0.3)" strokeWidth={1.5} />
-                <ReferenceLine
-                  x={Math.round(underlying.ltp)}
-                  stroke="#f59e0b"
-                  strokeDasharray="4 4"
-                  label={{
-                    value: `Spot ₹${underlying.ltp}`,
-                    fill: '#f59e0b',
-                    fontSize: 10,
-                    position: 'top',
-                  }}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const pt = payload[0].payload;
-                      const isProf = pt.expiryPnl >= 0;
-                      return (
-                        <div className="pro-chart-tooltip">
-                          <div className="pro-tooltip-head">
-                            <span>Underlying @ ₹{pt.spot}</span>
-                            <span className="font-mono">
-                              ({pt.changePct >= 0 ? '+' : ''}
-                              {pt.changePct}%)
-                            </span>
-                          </div>
-                          <div className="font-mono" style={{ marginTop: 4 }}>
-                            <div className={isProf ? 'text-emerald' : 'text-rose'}>
-                              Expiry P&L: <strong>{formatINR(pt.expiryPnl)}</strong>
+                Awaiting live spot & option legs to render payoff curve...
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={analysis.payoffCurve}
+                  margin={{ top: 10, right: 20, left: 10, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="payoffProfitGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.08)" />
+                  <XAxis
+                    dataKey="spot"
+                    stroke="#64748b"
+                    fontSize={11}
+                    tickLine={false}
+                    tickFormatter={(v) => `₹${v}`}
+                  />
+                  <YAxis
+                    stroke="#64748b"
+                    fontSize={11}
+                    tickLine={false}
+                    tickFormatter={(v) => formatINRCompact(v)}
+                  />
+                  <ReferenceLine y={0} stroke="rgba(255, 255, 255, 0.3)" strokeWidth={1.5} />
+                  <ReferenceLine
+                    x={Math.round(underlying.ltp)}
+                    stroke="#f59e0b"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: `Spot ₹${underlying.ltp}`,
+                      fill: '#f59e0b',
+                      fontSize: 10,
+                      position: 'top',
+                    }}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const pt = payload[0].payload;
+                        const isProf = pt.expiryPnl >= 0;
+                        return (
+                          <div className="pro-chart-tooltip">
+                            <div className="pro-tooltip-head">
+                              <span>Underlying @ ₹{pt.spot}</span>
+                              <span className="font-mono">
+                                ({pt.changePct >= 0 ? '+' : ''}
+                                {pt.changePct}%)
+                              </span>
                             </div>
-                            <div className="text-cyan">
-                              T+0 P&L: <strong>{formatINR(pt.t0Pnl)}</strong>
+                            <div className="font-mono" style={{ marginTop: 4 }}>
+                              <div className={isProf ? 'text-emerald' : 'text-rose'}>
+                                Expiry P&L: <strong>{formatINR(pt.expiryPnl)}</strong>
+                              </div>
+                              <div className="text-cyan">
+                                T+0 P&L: <strong>{formatINR(pt.t0Pnl)}</strong>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="expiryPnl"
-                  stroke="#10b981"
-                  strokeWidth={2.4}
-                  fill="url(#payoffProfitGrad)"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="t0Pnl"
-                  stroke="#06b6d4"
-                  strokeWidth={1.8}
-                  strokeDasharray="4 4"
-                  dot={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="expiryPnl"
+                    stroke="#10b981"
+                    strokeWidth={2.4}
+                    fill="url(#payoffProfitGrad)"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="t0Pnl"
+                    stroke="#06b6d4"
+                    strokeWidth={1.8}
+                    strokeDasharray="4 4"
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
@@ -587,13 +661,13 @@ export default function OptionsStrategyBuilder({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="pro-dock-title">
-                INSTITUTIONAL OPTION CHAIN ({underlying.symbol})
+                IIFL LIVE OPTION CHAIN ({underlying.symbol})
               </span>
               <span className="badge badge-emerald">PCR: {optionChain.pcr}</span>
               <span className="badge badge-amber">Max Pain: ₹{optionChain.maxPainStrike}</span>
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
-              Click <strong>+B</strong> (Buy) or <strong>+S</strong> (Sell) on any strike to append directly to your multi-leg strategy above.
+              Click <strong>+B</strong> (Buy) or <strong>+S</strong> (Sell) on any live strike to append directly to your multi-leg strategy above.
             </div>
           </div>
 
@@ -613,111 +687,118 @@ export default function OptionsStrategyBuilder({
           </div>
         </div>
 
-        <div className="option-chain-table-wrap">
-          <table className="option-chain-table font-mono">
-            <thead>
-              <tr>
-                <th>CALL OI</th>
-                <th>Δ DELTA</th>
-                <th>IV %</th>
-                <th>CALL LTP (₹)</th>
-                <th>ACTION</th>
-                <th className="strike-col-head">STRIKE</th>
-                <th>ACTION</th>
-                <th>PUT LTP (₹)</th>
-                <th>IV %</th>
-                <th>Δ DELTA</th>
-                <th>PUT OI</th>
-              </tr>
-            </thead>
-            <tbody>
-              {optionChain.rows.map((row) => {
-                const callOiPct = Math.round((row.callOi / maxOi) * 100);
-                const putOiPct = Math.round((row.putOi / maxOi) * 100);
-                return (
-                  <tr key={row.strike} className={row.isAtm ? 'atm-strike-row' : ''}>
-                    <td>
-                      <div className="oi-bar-cell">
-                        <span>{(row.callOi / 1000).toFixed(1)}K</span>
-                        <div className="oi-bar-track">
-                          <div className="oi-bar-fill call" style={{ width: `${callOiPct}%` }} />
+        {optionChain.rows.length === 0 ? (
+          <div style={{ padding: 28, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+            <WifiOff size={22} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+            <div>No live Option Chain rows returned from IIFL API for {underlying.symbol}.</div>
+          </div>
+        ) : (
+          <div className="option-chain-table-wrap">
+            <table className="option-chain-table font-mono">
+              <thead>
+                <tr>
+                  <th>CALL OI</th>
+                  <th>Δ DELTA</th>
+                  <th>IV %</th>
+                  <th>CALL LTP (₹)</th>
+                  <th>ACTION</th>
+                  <th className="strike-col-head">STRIKE</th>
+                  <th>ACTION</th>
+                  <th>PUT LTP (₹)</th>
+                  <th>IV %</th>
+                  <th>Δ DELTA</th>
+                  <th>PUT OI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {optionChain.rows.map((row) => {
+                  const callOiPct = Math.round((row.callOi / maxOi) * 100);
+                  const putOiPct = Math.round((row.putOi / maxOi) * 100);
+                  return (
+                    <tr key={row.strike} className={row.isAtm ? 'atm-strike-row' : ''}>
+                      <td>
+                        <div className="oi-bar-cell">
+                          <span>{(row.callOi / 1000).toFixed(1)}K</span>
+                          <div className="oi-bar-track">
+                            <div className="oi-bar-fill call" style={{ width: `${callOiPct}%` }} />
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="text-muted">{row.callDelta}</td>
-                    <td>{row.callIv}%</td>
-                    <td className="text-emerald" style={{ fontWeight: 700 }}>
-                      ₹{row.callLtp}
-                    </td>
-                    <td>
-                      <div className="chain-quick-btns">
-                        <button
-                          type="button"
-                          className="chain-btn buy"
-                          onClick={() =>
-                            handleAddLegFromChain('CE', 'BUY', row.strike, row.callLtp, row.callIv)
-                          }
-                        >
-                          +B
-                        </button>
-                        <button
-                          type="button"
-                          className="chain-btn sell"
-                          onClick={() =>
-                            handleAddLegFromChain('CE', 'SELL', row.strike, row.callLtp, row.callIv)
-                          }
-                        >
-                          +S
-                        </button>
-                      </div>
-                    </td>
-
-                    <td className="strike-center-cell">
-                      <span>{row.strike}</span>
-                      {row.isAtm && <span className="atm-pill">ATM</span>}
-                    </td>
-
-                    <td>
-                      <div className="chain-quick-btns">
-                        <button
-                          type="button"
-                          className="chain-btn buy"
-                          onClick={() =>
-                            handleAddLegFromChain('PE', 'BUY', row.strike, row.putLtp, row.putIv)
-                          }
-                        >
-                          +B
-                        </button>
-                        <button
-                          type="button"
-                          className="chain-btn sell"
-                          onClick={() =>
-                            handleAddLegFromChain('PE', 'SELL', row.strike, row.putLtp, row.putIv)
-                          }
-                        >
-                          +S
-                        </button>
-                      </div>
-                    </td>
-                    <td className="text-rose" style={{ fontWeight: 700 }}>
-                      ₹{row.putLtp}
-                    </td>
-                    <td>{row.putIv}%</td>
-                    <td className="text-muted">{row.putDelta}</td>
-                    <td>
-                      <div className="oi-bar-cell">
-                        <div className="oi-bar-track">
-                          <div className="oi-bar-fill put" style={{ width: `${putOiPct}%` }} />
+                      </td>
+                      <td className="text-muted">{row.callDelta}</td>
+                      <td>{row.callIv}%</td>
+                      <td className="text-emerald" style={{ fontWeight: 700 }}>
+                        ₹{row.callLtp}
+                      </td>
+                      <td>
+                        <div className="chain-quick-btns">
+                          <button
+                            type="button"
+                            className="chain-btn buy"
+                            onClick={() =>
+                              handleAddLegFromChain('CE', 'BUY', row.strike, row.callLtp, row.callIv)
+                            }
+                          >
+                            +B
+                          </button>
+                          <button
+                            type="button"
+                            className="chain-btn sell"
+                            onClick={() =>
+                              handleAddLegFromChain('CE', 'SELL', row.strike, row.callLtp, row.callIv)
+                            }
+                          >
+                            +S
+                          </button>
                         </div>
-                        <span>{(row.putOi / 1000).toFixed(1)}K</span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+
+                      <td className="strike-center-cell">
+                        <span>{row.strike}</span>
+                        {row.isAtm && <span className="atm-pill">ATM</span>}
+                      </td>
+
+                      <td>
+                        <div className="chain-quick-btns">
+                          <button
+                            type="button"
+                            className="chain-btn buy"
+                            onClick={() =>
+                              handleAddLegFromChain('PE', 'BUY', row.strike, row.putLtp, row.putIv)
+                            }
+                          >
+                            +B
+                          </button>
+                          <button
+                            type="button"
+                            className="chain-btn sell"
+                            onClick={() =>
+                              handleAddLegFromChain('PE', 'SELL', row.strike, row.putLtp, row.putIv)
+                            }
+                          >
+                            +S
+                          </button>
+                        </div>
+                      </td>
+                      <td className="text-rose" style={{ fontWeight: 700 }}>
+                        ₹{row.putLtp}
+                      </td>
+                      <td>{row.putIv}%</td>
+                      <td className="text-muted">{row.putDelta}</td>
+                      <td>
+                        <div className="oi-bar-cell">
+                          <div className="oi-bar-track">
+                            <div className="oi-bar-fill put" style={{ width: `${putOiPct}%` }} />
+                          </div>
+                          <span>{(row.putOi / 1000).toFixed(1)}K</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

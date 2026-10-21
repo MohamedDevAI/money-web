@@ -12,7 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { calculateBrokerageAndTaxes } from '../../../domain/brokerageCalculator';
-import { generateOrderBookDepth } from '../../../domain/marketSimulator';
+import { iiflService } from '../../../services/iiflService';
 import {
   calculatePositionSizing,
   evaluateRiskGuardrails,
@@ -32,7 +32,7 @@ import type {
 } from '../../../interface';
 
 interface OrderExecutionTicketProps {
-  activeInstrument: WatchlistInstrument;
+  activeInstrument?: WatchlistInstrument;
   trades: Trade[];
   riskConfig: TradingRiskConfig;
   onExecuteTrade: (trade: Omit<Trade, 'id'>) => Promise<void>;
@@ -58,21 +58,29 @@ export default function OrderExecutionTicket({
 }: OrderExecutionTicketProps) {
   const { mask } = useMoneyPrivacy();
 
+  const symbol = activeInstrument?.symbol || 'NIFTY 50';
+  const instrumentType = activeInstrument?.instrument || 'F&O';
+  const lotSize = activeInstrument?.lotSize || 25;
+  const ltp = activeInstrument?.ltp || 0;
+  const ask = activeInstrument?.ask || ltp;
+  const bid = activeInstrument?.bid || ltp;
+  const atr = activeInstrument?.atr14 || Math.max(1, ltp * 0.015);
+
   const [direction, setDirection] = useState<TradeDirection>('LONG');
   const [productType, setProductType] = useState<ProductType>('MIS');
   const [orderType, setOrderType] = useState<OrderType>('LIMIT');
   const [tradeType, setTradeType] = useState<TradeType>('INTRADAY');
 
-  const [entryPrice, setEntryPrice] = useState<number>(activeInstrument.ltp);
+  const [entryPrice, setEntryPrice] = useState<number>(ltp);
   const [stopLoss, setStopLoss] = useState<number>(
-    Number((activeInstrument.ltp - activeInstrument.atr14).toFixed(1))
+    Number(Math.max(0, ltp - atr).toFixed(1))
   );
   const [targetPrice, setTargetPrice] = useState<number>(
-    Number((activeInstrument.ltp + activeInstrument.atr14 * 2).toFixed(1))
+    Number((ltp + atr * 2).toFixed(1))
   );
 
   const [riskPct, setRiskPct] = useState<number>(riskConfig.maxRiskPerTradePct || 1.0);
-  const [quantity, setQuantity] = useState<number>(activeInstrument.lotSize * 2);
+  const [quantity, setQuantity] = useState<number>(lotSize);
   const [autoSizeEnabled, setAutoSizeEnabled] = useState<boolean>(true);
 
   const [strategy, setStrategy] = useState<string>(STRATEGIES[0]);
@@ -89,32 +97,30 @@ export default function OrderExecutionTicket({
 
   // Sync prices when activeInstrument changes
   useEffect(() => {
-    const ltp = activeInstrument.ltp;
-    const atr = activeInstrument.atr14 || ltp * 0.015;
-    setEntryPrice(ltp);
+    if (!activeInstrument) return;
+    setEntryPrice(activeInstrument.ltp);
     if (direction === 'LONG') {
-      setStopLoss(Number((ltp - atr).toFixed(1)));
-      setTargetPrice(Number((ltp + atr * 2.2).toFixed(1)));
+      setStopLoss(Number(Math.max(0, activeInstrument.ltp - atr).toFixed(1)));
+      setTargetPrice(Number((activeInstrument.ltp + atr * 2.2).toFixed(1)));
     } else {
-      setStopLoss(Number((ltp + atr).toFixed(1)));
-      setTargetPrice(Number((ltp - atr * 2.2).toFixed(1)));
+      setStopLoss(Number((activeInstrument.ltp + atr).toFixed(1)));
+      setTargetPrice(Number(Math.max(0, activeInstrument.ltp - atr * 2.2).toFixed(1)));
     }
-  }, [activeInstrument.symbol]);
+  }, [activeInstrument?.symbol]);
 
   // Apply external chart quick-order clicks
   useEffect(() => {
     if (externalOrderPreset) {
       const dir = externalOrderPreset.direction;
       const prc = externalOrderPreset.price;
-      const atr = activeInstrument.atr14 || prc * 0.015;
       setDirection(dir);
       setEntryPrice(prc);
       if (dir === 'LONG') {
-        setStopLoss(Number((prc - atr).toFixed(1)));
+        setStopLoss(Number(Math.max(0, prc - atr).toFixed(1)));
         setTargetPrice(Number((prc + atr * 2.2).toFixed(1)));
       } else {
         setStopLoss(Number((prc + atr).toFixed(1)));
-        setTargetPrice(Number((prc - atr * 2.2).toFixed(1)));
+        setTargetPrice(Number(Math.max(0, prc - atr * 2.2).toFixed(1)));
       }
     }
   }, [externalOrderPreset]);
@@ -128,9 +134,9 @@ export default function OrderExecutionTicket({
         entryPrice,
         stopLoss,
         targetPrice,
-        lotSize: activeInstrument.lotSize,
+        lotSize,
         customQty: autoSizeEnabled ? undefined : quantity,
-        instrument: activeInstrument.instrument,
+        instrument: instrumentType,
         productType,
       }),
     [
@@ -139,8 +145,8 @@ export default function OrderExecutionTicket({
       entryPrice,
       stopLoss,
       targetPrice,
-      activeInstrument.lotSize,
-      activeInstrument.instrument,
+      lotSize,
+      instrumentType,
       productType,
       autoSizeEnabled,
       quantity,
@@ -158,14 +164,14 @@ export default function OrderExecutionTicket({
   const chargesBreakdown = useMemo(
     () =>
       calculateBrokerageAndTaxes({
-        instrument: activeInstrument.instrument,
+        instrument: instrumentType,
         tradeType,
         direction,
         entryPrice,
         exitPrice: targetPrice,
         quantity,
       }),
-    [activeInstrument.instrument, tradeType, direction, entryPrice, targetPrice, quantity]
+    [instrumentType, tradeType, direction, entryPrice, targetPrice, quantity]
   );
 
   // Guardrails Evaluation
@@ -182,21 +188,20 @@ export default function OrderExecutionTicket({
     [riskConfig, trades, entryPrice, stopLoss, targetPrice, quantity, allChecksChecked]
   );
 
-  // Level-2 Order Book Depth
+  // Level-2 Order Book Depth strictly from IIFL 1502 Market Depth packet
   const orderBook = useMemo(
-    () => generateOrderBookDepth(activeInstrument),
-    [activeInstrument]
+    () => iiflService.getCachedOrderBookDepth(symbol, ltp),
+    [symbol, ltp]
   );
 
   const handleDirectionChange = (newDir: TradeDirection) => {
     setDirection(newDir);
-    const atr = activeInstrument.atr14 || entryPrice * 0.015;
     if (newDir === 'LONG') {
-      setStopLoss(Number((entryPrice - atr).toFixed(1)));
+      setStopLoss(Number(Math.max(0, entryPrice - atr).toFixed(1)));
       setTargetPrice(Number((entryPrice + atr * 2.2).toFixed(1)));
     } else {
       setStopLoss(Number((entryPrice + atr).toFixed(1)));
-      setTargetPrice(Number((entryPrice - atr * 2.2).toFixed(1)));
+      setTargetPrice(Number(Math.max(0, entryPrice - atr * 2.2).toFixed(1)));
     }
   };
 
@@ -207,7 +212,7 @@ export default function OrderExecutionTicket({
       direction === 'LONG'
         ? entryPrice + riskDist * rrMultiple
         : entryPrice - riskDist * rrMultiple;
-    setTargetPrice(Number(nextTarget.toFixed(1)));
+    setTargetPrice(Number(Math.max(0, nextTarget).toFixed(1)));
   };
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
@@ -215,28 +220,28 @@ export default function OrderExecutionTicket({
     if (!guardrailEval.canExecute) return;
 
     await onExecuteTrade({
-      symbol: activeInstrument.symbol,
-      instrument: activeInstrument.instrument,
+      symbol,
+      instrument: instrumentType,
       direction,
       tradeType,
       orderType,
       productType,
       entryPrice: Number(entryPrice),
-      currentPrice: activeInstrument.ltp,
+      currentPrice: ltp || Number(entryPrice),
       stopLoss: Number(stopLoss),
       targetPrice: Number(targetPrice),
       quantity: Number(quantity),
-      lotSize: activeInstrument.lotSize,
+      lotSize,
       entryDate: new Date().toISOString(),
       status: 'OPEN',
       strategy,
       setupGrade,
       emotion,
       checklistPassed: allChecksChecked,
-      notes: notes.trim() || `${orderType} ${productType} order executed via Institutional Ticket.`,
+      notes: notes.trim() || `${orderType} ${productType} order routed via IIFL Interactive API.`,
     });
 
-    setExecBanner(`${direction} ${quantity} ${activeInstrument.symbol} @ ₹${entryPrice} routed!`);
+    setExecBanner(`${direction} ${quantity} ${symbol} @ ₹${entryPrice} routed to IIFL API!`);
     setTimeout(() => setExecBanner(null), 3500);
   };
 
@@ -247,9 +252,9 @@ export default function OrderExecutionTicket({
         <div className="pro-ticket-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <Calculator size={15} className="text-cyan" />
-            <span className="pro-dock-title">EXECUTION & POSITION SIZER</span>
+            <span className="pro-dock-title">IIFL EXECUTION & SIZER</span>
           </div>
-          <span className="pro-lot-badge font-mono">1 Lot = {activeInstrument.lotSize}</span>
+          <span className="pro-lot-badge font-mono">1 Lot = {lotSize}</span>
         </div>
 
         {/* BUY / SELL Direction Switcher */}
@@ -260,7 +265,7 @@ export default function OrderExecutionTicket({
             onClick={() => handleDirectionChange('LONG')}
           >
             <span>▲ LONG / BUY</span>
-            <span className="font-mono">{formatINR(activeInstrument.ask)}</span>
+            <span className="font-mono">{formatINR(ask)}</span>
           </button>
           <button
             type="button"
@@ -268,7 +273,7 @@ export default function OrderExecutionTicket({
             onClick={() => handleDirectionChange('SHORT')}
           >
             <span>▼ SHORT / SELL</span>
-            <span className="font-mono">{formatINR(activeInstrument.bid)}</span>
+            <span className="font-mono">{formatINR(bid)}</span>
           </button>
         </div>
 
@@ -298,7 +303,7 @@ export default function OrderExecutionTicket({
                 onChange={(e) => {
                   const ot = e.target.value as OrderType;
                   setOrderType(ot);
-                  if (ot === 'MARKET') setEntryPrice(activeInstrument.ltp);
+                  if (ot === 'MARKET' && ltp > 0) setEntryPrice(ltp);
                 }}
               >
                 <option value="LIMIT">LIMIT</option>
@@ -362,13 +367,15 @@ export default function OrderExecutionTicket({
             <div className="pro-field-box">
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <label>Entry Price (₹)</label>
-                <button
-                  type="button"
-                  className="pro-micro-link"
-                  onClick={() => setEntryPrice(activeInstrument.ltp)}
-                >
-                  LTP
-                </button>
+                {ltp > 0 && (
+                  <button
+                    type="button"
+                    className="pro-micro-link"
+                    onClick={() => setEntryPrice(ltp)}
+                  >
+                    LTP
+                  </button>
+                )}
               </div>
               <input
                 type="number"
@@ -388,7 +395,7 @@ export default function OrderExecutionTicket({
               <input
                 type="number"
                 min={1}
-                step={activeInstrument.lotSize}
+                step={lotSize}
                 value={quantity}
                 onChange={(e) => {
                   setAutoSizeEnabled(false);
@@ -614,12 +621,12 @@ export default function OrderExecutionTicket({
         </form>
       </div>
 
-      {/* ─── 2. LEVEL-2 ORDER BOOK (DOM LADDER) ─── */}
+      {/* ─── 2. LEVEL-2 ORDER BOOK (DOM LADDER) FROM IIFL 1502 STREAM ─── */}
       <div className="glass-panel pro-orderbook-card">
         <div className="pro-ticket-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <Layers size={14} className="text-cyan" />
-            <span className="pro-dock-title">L2 MARKET DEPTH (5x5 DOM)</span>
+            <span className="pro-dock-title">IIFL L2 DEPTH (5x5 DOM)</span>
           </div>
           <span className="font-mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
             Spread: ₹{orderBook.spread} ({orderBook.spreadPct}%)
@@ -641,45 +648,51 @@ export default function OrderExecutionTicket({
         </div>
 
         {/* 5x5 Bid / Ask Table */}
-        <div className="dom-ladder-grid font-mono">
-          <div className="dom-col">
-            <div className="dom-col-head">
-              <span>QTY</span>
-              <span>BID (₹)</span>
-            </div>
-            {orderBook.bids.map((b, i) => (
-              <div
-                key={i}
-                className="dom-row bid"
-                onClick={() => setEntryPrice(b.price)}
-                title="Click to set Limit Price"
-              >
-                <div className="dom-depth-fill bid" style={{ width: `${b.depthPct}%` }} />
-                <span className="dom-qty">{b.quantity.toLocaleString()}</span>
-                <span className="dom-price text-emerald">{b.price.toFixed(2)}</span>
-              </div>
-            ))}
+        {orderBook.bids.length === 0 && orderBook.asks.length === 0 ? (
+          <div style={{ padding: '14px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+            Awaiting IIFL 1502 L2 Market Depth packet...
           </div>
+        ) : (
+          <div className="dom-ladder-grid font-mono">
+            <div className="dom-col">
+              <div className="dom-col-head">
+                <span>QTY</span>
+                <span>BID (₹)</span>
+              </div>
+              {orderBook.bids.map((b, i) => (
+                <div
+                  key={i}
+                  className="dom-row bid"
+                  onClick={() => setEntryPrice(b.price)}
+                  title="Click to set Limit Price"
+                >
+                  <div className="dom-depth-fill bid" style={{ width: `${b.depthPct}%` }} />
+                  <span className="dom-qty">{b.quantity.toLocaleString()}</span>
+                  <span className="dom-price text-emerald">{b.price.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
 
-          <div className="dom-col">
-            <div className="dom-col-head">
-              <span>ASK (₹)</span>
-              <span>QTY</span>
-            </div>
-            {orderBook.asks.map((a, i) => (
-              <div
-                key={i}
-                className="dom-row ask"
-                onClick={() => setEntryPrice(a.price)}
-                title="Click to set Limit Price"
-              >
-                <div className="dom-depth-fill ask" style={{ width: `${a.depthPct}%` }} />
-                <span className="dom-price text-rose">{a.price.toFixed(2)}</span>
-                <span className="dom-qty">{a.quantity.toLocaleString()}</span>
+            <div className="dom-col">
+              <div className="dom-col-head">
+                <span>ASK (₹)</span>
+                <span>QTY</span>
               </div>
-            ))}
+              {orderBook.asks.map((a, i) => (
+                <div
+                  key={i}
+                  className="dom-row ask"
+                  onClick={() => setEntryPrice(a.price)}
+                  title="Click to set Limit Price"
+                >
+                  <div className="dom-depth-fill ask" style={{ width: `${a.depthPct}%` }} />
+                  <span className="dom-price text-rose">{a.price.toFixed(2)}</span>
+                  <span className="dom-qty">{a.quantity.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </aside>
   );

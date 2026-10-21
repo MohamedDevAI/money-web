@@ -141,8 +141,8 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
   const updateFireSettingsMutation = useUpdateFireSettingsMutation();
   const syncHealthMutation = useSyncFinancialHealthMutation();
 
-  // Institutional Treasury Cash & Margin Reserve
-  const cashLiquidity = 245000;
+  // Live Treasury Cash & Margin Reserve from IIFL Interactive API
+  const cashLiquidity = marketFeed.cashAvailable || 0;
   const debtLiabilities = 0;
 
   // Compute Portfolio Level Stats
@@ -333,6 +333,33 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
             {isMoneyHidden ? <EyeOff size={15} /> : <Eye size={15} />}
             <span>{isMoneyHidden ? 'Show Balances' : 'Hide Balances'}</span>
           </button>
+
+          {/* IIFL Live API Connection Pill */}
+          <span
+            className={`money-header-health-badge ${
+              marketFeed.connectionState.marketDataConnected ? 'guardrail-ok' : 'guardrail-warn'
+            }`}
+            onClick={() => marketFeed.triggerManualTick()}
+            title={
+              marketFeed.connectionState.errorMessage ||
+              'Click to sync IIFL MarketData & Interactive API sessions'
+            }
+          >
+            <Activity
+              size={14}
+              className={
+                marketFeed.connectionState.marketDataConnected ? 'text-emerald' : 'text-amber'
+              }
+            />
+            <span className="font-mono">
+              IIFL API:{' '}
+              {marketFeed.connectionState.marketDataConnected
+                ? 'CONNECTED'
+                : marketFeed.connectionState.configured
+                ? 'CONNECTING'
+                : 'AWAITING KEYS'}
+            </span>
+          </span>
 
           {/* Risk Guardrail Pill */}
           <span
