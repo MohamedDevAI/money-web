@@ -11,8 +11,6 @@ import {
 } from 'recharts';
 import {
   Award,
-  ShieldAlert,
-  ShieldCheck,
   Sliders,
   TrendingUp,
 } from 'lucide-react';
@@ -53,32 +51,6 @@ export default function TradingRiskAnalytics({
       {/* ─── 1. INSTITUTIONAL RISK GUARDRAIL & KILL-SWITCH COMMAND HEADER ─── */}
       <div className="glass-panel risk-command-banner">
         <div className="risk-banner-top">
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span
-                className={`badge ${
-                  guardrailStatus.status === 'CLEAR'
-                    ? 'badge-emerald'
-                    : guardrailStatus.status === 'WARNING'
-                    ? 'badge-amber'
-                    : 'badge-rose'
-                }`}
-              >
-                {guardrailStatus.status === 'CLEAR' ? (
-                  <ShieldCheck size={13} />
-                ) : (
-                  <ShieldAlert size={13} />
-                )}
-                <span>RISK ENGINE: {guardrailStatus.status.replace(/_/g, ' ')}</span>
-              </span>
-              <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Desk Base Capital: {mask(formatINR(riskConfig.accountCapital))}
-              </span>
-            </div>
-            <h3 className="options-lab-title" style={{ marginTop: 6 }}>
-              Institutional Risk Analytics, Drawdown & Strategy Attribution
-            </h3>
-          </div>
 
           <button
             type="button"
@@ -185,9 +157,8 @@ export default function TradingRiskAnalytics({
             </div>
             <div className="gauge-track">
               <div
-                className={`gauge-fill ${
-                  guardrailStatus.dailyLossUsedPct >= 80 ? 'danger' : 'safe'
-                }`}
+                className={`gauge-fill ${guardrailStatus.dailyLossUsedPct >= 80 ? 'danger' : 'safe'
+                  }`}
                 style={{ width: `${Math.min(100, Math.max(3, guardrailStatus.dailyLossUsedPct))}%` }}
               />
             </div>
@@ -202,9 +173,8 @@ export default function TradingRiskAnalytics({
             </div>
             <div className="gauge-track">
               <div
-                className={`gauge-fill ${
-                  guardrailStatus.openHeatUsedPct >= 80 ? 'warn' : 'cyan'
-                }`}
+                className={`gauge-fill ${guardrailStatus.openHeatUsedPct >= 80 ? 'warn' : 'cyan'
+                  }`}
                 style={{ width: `${Math.min(100, Math.max(4, guardrailStatus.openHeatUsedPct))}%` }}
               />
             </div>
@@ -217,9 +187,8 @@ export default function TradingRiskAnalytics({
         <div className="glass-panel quant-cell">
           <span className="quant-lbl">PROFIT FACTOR</span>
           <div
-            className={`quant-val font-mono ${
-              stats.profitFactor >= 1.5 ? 'text-emerald' : 'text-amber'
-            }`}
+            className={`quant-val font-mono ${stats.profitFactor >= 1.5 ? 'text-emerald' : 'text-amber'
+              }`}
           >
             {stats.profitFactor.toFixed(2)}
           </div>
@@ -229,9 +198,8 @@ export default function TradingRiskAnalytics({
         <div className="glass-panel quant-cell">
           <span className="quant-lbl">TRADE EXPECTANCY</span>
           <div
-            className={`quant-val font-mono ${
-              stats.expectancy >= 0 ? 'text-emerald' : 'text-rose'
-            }`}
+            className={`quant-val font-mono ${stats.expectancy >= 0 ? 'text-emerald' : 'text-rose'
+              }`}
           >
             {stats.expectancy >= 0 ? '+' : ''}
             {mask(formatINR(stats.expectancy))}
@@ -293,9 +261,8 @@ export default function TradingRiskAnalytics({
         <div className="glass-panel quant-cell">
           <span className="quant-lbl">NET P&L (AFTER TAXES)</span>
           <div
-            className={`quant-val font-mono ${
-              stats.netRealizedPnl >= 0 ? 'text-emerald' : 'text-rose'
-            }`}
+            className={`quant-val font-mono ${stats.netRealizedPnl >= 0 ? 'text-emerald' : 'text-rose'
+              }`}
           >
             {stats.netRealizedPnl >= 0 ? '+' : ''}
             {mask(formatINR(stats.netRealizedPnl))}

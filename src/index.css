@@ -137,7 +137,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Standard Buttons */
-.btn {
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-glass {
   display: inline-flex;
   align-items: center;
   justify-content: center;

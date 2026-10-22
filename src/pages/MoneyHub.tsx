@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
   ShieldCheck,
-  CircleDollarSign,
   TrendingUp,
   TrendingDown,
   LayoutDashboard,
@@ -11,7 +10,6 @@ import {
   Terminal,
   ListChecks,
   Cpu,
-  ShieldAlert,
 } from 'lucide-react';
 import { formatINR, formatPctChange } from '../utils/formatters';
 import { useQueryClient } from '@tanstack/react-query';
@@ -33,7 +31,6 @@ import {
 import {
   loadRiskConfig,
   saveRiskConfig,
-  evaluateRiskGuardrails,
 } from '../domain/riskGuardrails';
 import { useMoneyPrivacy } from '../context/MoneyPrivacyContext';
 import { useLiveMarketFeed } from '../hooks/useLiveMarketFeed';
@@ -200,7 +197,6 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
   // Trading Stats & Guardrails
   const tradingStats = tradingService.computeTradingStats(liveTrades);
   const openTrades = liveTrades.filter((t) => t.status === 'OPEN');
-  const guardrailStatus = evaluateRiskGuardrails(riskConfig, liveTrades);
 
   const handleTogglePillar = (pillarId: string, newState: boolean) => {
     updateHealthAnswerMutation.mutate({
@@ -312,20 +308,6 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
     <div className="money-screen-root">
       {/* Header Banner */}
       <div className="money-header-banner">
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span className="money-sub-badge">
-              <CircleDollarSign size={13} style={{ display: 'inline', marginRight: 4 }} />
-              Institutional Wealth, Derivatives & Capital Engine
-            </span>
-          </div>
-          <h1 className="money-title-text">
-            Net Worth & <span className="money-gold-gradient">Pro Trading Command Center</span>
-          </h1>
-          <p className="page-header-subtitle">
-            Unified institutional terminal for tracking Equities, Mutual Fund SIPs, Sovereign Bonds, FDs, and Live F&O Execution in INR (₹).
-          </p>
-        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {/* Eye Hide/Unhide Money Button */}
@@ -337,54 +319,6 @@ export default function MoneyHub({ marketFeed: externalFeed }: MoneyHubProps) {
             {isMoneyHidden ? <EyeOff size={15} /> : <Eye size={15} />}
             <span>{isMoneyHidden ? 'Show Balances' : 'Hide Balances'}</span>
           </button>
-
-          {/* IIFL Live API Connection Pill */}
-          <span
-            className={`money-header-health-badge ${
-              marketFeed.connectionState.marketDataConnected ? 'guardrail-ok' : 'guardrail-warn'
-            }`}
-            onClick={() => setIsIiflModalOpen(true)}
-            title={
-              marketFeed.connectionState.errorMessage ||
-              'Click to authenticate or manage IIFL Capital Markets API session'
-            }
-          >
-            <Activity
-              size={14}
-              className={
-                marketFeed.connectionState.marketDataConnected ? 'text-emerald' : 'text-amber'
-              }
-            />
-            <span className="font-mono">
-              IIFL API:{' '}
-              {marketFeed.connectionState.marketDataConnected
-                ? 'CONNECTED'
-                : marketFeed.connectionState.configured
-                ? 'CONNECT 2FA'
-                : 'AWAITING KEYS'}
-            </span>
-          </span>
-
-          {/* Risk Guardrail Pill */}
-          <span
-            className={`money-header-health-badge ${
-              guardrailStatus.status === 'CLEAR' ? 'guardrail-ok' : 'guardrail-warn'
-            }`}
-            onClick={() => {
-              setActiveTab('trading');
-              setTradingDesk('analytics');
-            }}
-            title="Click to inspect Trading Risk Guardrails"
-          >
-            {guardrailStatus.status === 'CLEAR' ? (
-              <ShieldCheck size={14} className="text-emerald" />
-            ) : (
-              <ShieldAlert size={14} className="text-amber" />
-            )}
-            <span className="font-mono">
-              Risk Engine: {guardrailStatus.status === 'CLEAR' ? 'ARMED' : 'CAUTION'}
-            </span>
-          </span>
 
           {/* Health Score Pill */}
           <span

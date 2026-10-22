@@ -1,10 +1,8 @@
 /**
- * Institutional Trading Service for Money OS Pro Trading Terminal (Live Market API Mode).
+ * Institutional Trading Service for Money OS Pro Trading Terminal (100% Spring Boot Backend Mode).
  *
- * Fetches and routes trades/positions via:
- *   1. IIFL Interactive Order & Net Positions API (/api/iifl/positions, /api/iifl/orders)
- *   2. Spring Boot + MongoDB Trading Journal API (/api/trading)
- *   3. Live NSE Market Quotes API (/api/nse-live) for real-time MTM & historical session executions
+ * All MongoDB trade persistence, live LTP enrichment, IIFL Net Positions merging,
+ * and IIFL live order routing are executed by the Spring Boot API (`/api/trading`).
  */
 
 import type {
@@ -16,31 +14,6 @@ import type {
 import { calculateBrokerageAndTaxes } from '../domain/brokerageCalculator';
 import { DEFAULT_RISK_CONFIG, loadRiskConfig } from '../domain/riskGuardrails';
 import apiClient from './apiClient';
-import { iiflService } from './iiflService';
-
-const SESSION_TRADES_CACHE_KEY = 'money_os_live_session_trades';
-
-function getSessionCreatedTrades(): Trade[] {
-  try {
-    if (typeof sessionStorage !== 'undefined') {
-      const raw = sessionStorage.getItem(SESSION_TRADES_CACHE_KEY);
-      if (raw) return JSON.parse(raw);
-    }
-  } catch {
-    // ignore
-  }
-  return [];
-}
-
-function saveSessionCreatedTrades(trades: Trade[]) {
-  try {
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem(SESSION_TRADES_CACHE_KEY, JSON.stringify(trades));
-    }
-  } catch {
-    // ignore
-  }
-}
 
 /**
  * Enriches a raw API trade with computed P&L, Indian regulatory brokerage charges, R-Multiple, and R:R ratio.
@@ -83,7 +56,7 @@ export function enrichTradeMetrics(tradeData: Partial<Trade> & { entryPrice: num
   const netPnl = Number((grossPnl - charges).toFixed(2));
 
   return {
-    id: String(tradeData.id || (tradeData as any)._id || `tr-${Date.now()}`),
+    id: String(tradeData.id || (tradeData as any)._id || ''),
     symbol: (tradeData.symbol || 'NIFTY').toUpperCase(),
     instrument: tradeData.instrument || 'F&O',
     direction: tradeData.direction || 'LONG',
@@ -119,268 +92,32 @@ export function enrichTradeMetrics(tradeData: Partial<Trade> & { entryPrice: num
 
 export const tradingService = {
   /**
-   * Fetches all trades & open positions from Backend REST API (/api/trading),
-   * IIFL Interactive Net Positions API (/api/iifl/positions), and Live NSE Market Quotes.
+   * Fetches actual trades & open positions from Spring Boot (`GET /api/trading`).
    */
   getTrades: async (): Promise<Trade[]> => {
-    const merged: Trade[] = [...getSessionCreatedTrades()];
-
-    // 1. Fetch from Backend Trading Journal API
-    try {
-      const { data } = await apiClient.get<Trade[]>('/trading');
-      if (Array.isArray(data)) {
-        for (const t of data) {
-          const enriched = enrichTradeMetrics(t);
-          if (!merged.some((m) => m.id === enriched.id)) {
-            merged.push(enriched);
-          }
-        }
-      }
-    } catch {
-      // Backend trading journal endpoint offline
-    }
-
-    // 2. Fetch live Net Positions from IIFL Interactive API
-    try {
-      const iiflPositions = await iiflService.getNetPositions();
-      for (const pos of iiflPositions) {
-        const enrichedPos = enrichTradeMetrics(pos);
-        if (!merged.some((m) => m.id === enrichedPos.id)) {
-          merged.push(enrichedPos);
-        }
-      }
-    } catch {
-      // IIFL Interactive session not active
-    }
-
-    // 3. If no backend/IIFL positions yet, derive live positions from real-time NSE quotes (`/api/nse-live`)
-    if (merged.length === 0) {
-      try {
-        const liveQuotes = await iiflService.getLiveWatchlistQuotes();
-        if (liveQuotes.length > 0) {
-          const nifty = liveQuotes.find((q) => q.symbol === 'NIFTY 50') || liveQuotes[0];
-          const reliance = liveQuotes.find((q) => q.symbol === 'RELIANCE');
-          const hdfc = liveQuotes.find((q) => q.symbol === 'HDFCBANK');
-          const tcs = liveQuotes.find((q) => q.symbol === 'TCS');
-          const icici = liveQuotes.find((q) => q.symbol === 'ICICIBANK');
-
-          const liveDerived: Trade[] = [];
-          if (nifty && nifty.ltp > 0) {
-            liveDerived.push(
-              enrichTradeMetrics({
-                id: 'live-nse-nifty',
-                symbol: nifty.symbol,
-                instrument: 'F&O',
-                direction: nifty.change >= 0 ? 'LONG' : 'SHORT',
-                tradeType: 'INTRADAY',
-                orderType: 'LIMIT',
-                productType: 'MIS',
-                entryPrice: nifty.open || nifty.prevClose,
-                currentPrice: nifty.ltp,
-                stopLoss: Number(
-                  (
-                    (nifty.open || nifty.ltp) *
-                    (nifty.change >= 0 ? 0.992 : 1.008)
-                  ).toFixed(2)
-                ),
-                targetPrice: Number(
-                  (
-                    (nifty.open || nifty.ltp) *
-                    (nifty.change >= 0 ? 1.018 : 0.982)
-                  ).toFixed(2)
-                ),
-                quantity: nifty.lotSize * 4,
-                lotSize: nifty.lotSize,
-                entryDate: new Date().toISOString(),
-                status: 'OPEN',
-                strategy: '15m ORB + VWAP Reclaim',
-                setupGrade: 'A+',
-                emotion: 'Disciplined',
-                notes: `Live NSE Intraday F&O position tracking real-time ${nifty.symbol} spot @ ₹${nifty.ltp}`,
-              })
-            );
-          }
-
-          if (reliance && reliance.ltp > 0) {
-            liveDerived.push(
-              enrichTradeMetrics({
-                id: 'live-nse-reliance',
-                symbol: reliance.symbol,
-                instrument: 'EQUITY',
-                direction: 'LONG',
-                tradeType: 'SWING',
-                orderType: 'LIMIT',
-                productType: 'CNC',
-                entryPrice: reliance.prevClose,
-                currentPrice: reliance.ltp,
-                stopLoss: Number((reliance.prevClose * 0.975).toFixed(2)),
-                targetPrice: Number((reliance.prevClose * 1.055).toFixed(2)),
-                quantity: 100,
-                lotSize: reliance.lotSize,
-                entryDate: new Date(Date.now() - 86400000).toISOString(),
-                status: 'OPEN',
-                strategy: '20 EMA Pullback & Volume Pocket',
-                setupGrade: 'A+',
-                emotion: 'Disciplined',
-                notes: `Live NSE Equity swing tracking real-time ${reliance.symbol} @ ₹${reliance.ltp}`,
-              })
-            );
-          }
-
-          if (hdfc && hdfc.ltp > 0) {
-            liveDerived.push(
-              enrichTradeMetrics({
-                id: 'live-nse-hdfc-closed',
-                symbol: hdfc.symbol,
-                instrument: 'EQUITY',
-                direction: hdfc.ltp >= hdfc.open ? 'LONG' : 'SHORT',
-                tradeType: 'INTRADAY',
-                orderType: 'LIMIT',
-                productType: 'MIS',
-                entryPrice: hdfc.open,
-                currentPrice: hdfc.ltp,
-                exitPrice: hdfc.ltp,
-                stopLoss: Number((hdfc.open * (hdfc.ltp >= hdfc.open ? 0.99 : 1.01)).toFixed(2)),
-                targetPrice: Number((hdfc.open * (hdfc.ltp >= hdfc.open ? 1.02 : 0.98)).toFixed(2)),
-                quantity: 200,
-                lotSize: hdfc.lotSize,
-                entryDate: new Date(Date.now() - 3 * 86400000).toISOString(),
-                exitDate: new Date(Date.now() - 2 * 86400000).toISOString(),
-                status: 'CLOSED',
-                strategy: 'Opening Range Breakout (ORB)',
-                setupGrade: 'A',
-                emotion: 'Calm',
-                notes: `Realized session trade from live ${hdfc.symbol} OHLC feed`,
-              })
-            );
-          }
-
-          if (tcs && tcs.ltp > 0) {
-            liveDerived.push(
-              enrichTradeMetrics({
-                id: 'live-nse-tcs-closed',
-                symbol: tcs.symbol,
-                instrument: 'EQUITY',
-                direction: tcs.ltp >= tcs.prevClose ? 'LONG' : 'SHORT',
-                tradeType: 'SWING',
-                orderType: 'LIMIT',
-                productType: 'CNC',
-                entryPrice: tcs.prevClose,
-                currentPrice: tcs.ltp,
-                exitPrice: tcs.ltp,
-                stopLoss: Number((tcs.prevClose * (tcs.ltp >= tcs.prevClose ? 0.985 : 1.015)).toFixed(2)),
-                targetPrice: Number((tcs.prevClose * (tcs.ltp >= tcs.prevClose ? 1.035 : 0.965)).toFixed(2)),
-                quantity: 50,
-                lotSize: tcs.lotSize,
-                entryDate: new Date(Date.now() - 2 * 86400000).toISOString(),
-                exitDate: new Date(Date.now() - 1 * 86400000).toISOString(),
-                status: 'CLOSED',
-                strategy: 'Relative Strength Stage-2 Breakout',
-                setupGrade: 'A+',
-                emotion: 'Disciplined',
-                notes: `Realized session trade from live ${tcs.symbol} OHLC feed`,
-              })
-            );
-          }
-
-          if (icici && icici.ltp > 0) {
-            liveDerived.push(
-              enrichTradeMetrics({
-                id: 'live-nse-icici-closed',
-                symbol: icici.symbol,
-                instrument: 'F&O',
-                direction: icici.high > icici.open ? 'LONG' : 'SHORT',
-                tradeType: 'INTRADAY',
-                orderType: 'LIMIT',
-                productType: 'MIS',
-                entryPrice: icici.open,
-                currentPrice: icici.high,
-                exitPrice: icici.high,
-                stopLoss: icici.low,
-                targetPrice: Number((icici.high * 1.01).toFixed(2)),
-                quantity: icici.lotSize,
-                lotSize: icici.lotSize,
-                entryDate: new Date(Date.now() - 86400000).toISOString(),
-                exitDate: new Date().toISOString(),
-                status: 'CLOSED',
-                strategy: '15m ORB + VWAP Reclaim',
-                setupGrade: 'A+',
-                emotion: 'Disciplined',
-                notes: `Realized session trade from live ${icici.symbol} OHLC feed`,
-              })
-            );
-          }
-
-          saveSessionCreatedTrades(liveDerived);
-          merged.push(...liveDerived);
-        }
-      } catch {
-        // Ignore if offline
-      }
-    }
-
-    return merged;
+    const { data } = await apiClient.get<Trade[]>('/trading');
+    if (!Array.isArray(data)) return [];
+    return data.map((t) => enrichTradeMetrics(t));
   },
 
   /**
-   * Routes a live order to IIFL Interactive API (if connected) and persists the journal record.
+   * Creates a trade & routes live IIFL order via Spring Boot (`POST /api/trading`).
    */
   createTrade: async (tradeData: Omit<Trade, 'id'>): Promise<Trade> => {
     const prepared = enrichTradeMetrics(tradeData);
-
-    const existingSession = getSessionCreatedTrades();
-    saveSessionCreatedTrades([prepared, ...existingSession]);
-
-    try {
-      const iiflState = iiflService.getConnectionState();
-      if (iiflState.interactiveConnected) {
-        await iiflService.placeOrder(tradeData);
-      }
-    } catch {
-      // Proceed to journal persistence
-    }
-
-    try {
-      const { data } = await apiClient.post<Trade>('/trading', prepared);
-      if (data) return enrichTradeMetrics(data);
-    } catch {
-      // Returned from session
-    }
-    return prepared;
+    const { data } = await apiClient.post<Trade>('/trading', prepared);
+    return enrichTradeMetrics(data || prepared);
   },
 
   updateTrade: async (id: string, updates: Partial<Trade>): Promise<Trade> => {
-    const existingSession = getSessionCreatedTrades();
-    const match = existingSession.find((t) => t.id === id);
-    const updatedLocal = enrichTradeMetrics({
-      ...(match || {}),
+    const { data } = await apiClient.put<Trade>(`/trading/${id}`, updates);
+    return enrichTradeMetrics({
       ...updates,
-      entryPrice: Number(updates.entryPrice ?? match?.entryPrice ?? 0),
-      quantity: Number(updates.quantity ?? match?.quantity ?? 1),
+      ...(data || {}),
+      entryPrice: Number(data?.entryPrice ?? updates.entryPrice ?? 0),
+      quantity: Number(data?.quantity ?? updates.quantity ?? 1),
       id,
     });
-
-    if (match) {
-      saveSessionCreatedTrades(
-        existingSession.map((t) => (t.id === id ? updatedLocal : t))
-      );
-    }
-
-    try {
-      const { data } = await apiClient.put<Trade>(`/trading/${id}`, updates);
-      if (data) {
-        return enrichTradeMetrics({
-          ...updates,
-          ...data,
-          entryPrice: Number(data.entryPrice ?? updates.entryPrice ?? 0),
-          quantity: Number(data.quantity ?? updates.quantity ?? 1),
-          id,
-        });
-      }
-    } catch {
-      // Return session trade
-    }
-    return updatedLocal;
   },
 
   closeTrade: async (id: string, exitPrice: number): Promise<Trade> => {
@@ -393,19 +130,10 @@ export const tradingService = {
   },
 
   deleteTrade: async (id: string): Promise<boolean> => {
-    const existingSession = getSessionCreatedTrades();
-    saveSessionCreatedTrades(existingSession.filter((t) => t.id !== id));
-    try {
-      await apiClient.delete(`/trading/${id}`);
-    } catch {
-      // Deleted from session
-    }
+    await apiClient.delete(`/trading/${id}`);
     return true;
   },
 
-  /**
-   * Computes comprehensive institutional trading & risk metrics from real API trades.
-   */
   computeTradingStats: (trades: Trade[]): TradingStats => {
     const riskConfig = loadRiskConfig() || DEFAULT_RISK_CONFIG;
     let capitalDeployed = 0;

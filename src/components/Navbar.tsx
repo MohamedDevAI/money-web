@@ -1,7 +1,5 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  Activity,
-  Coins,
   Database,
   Eye,
   EyeOff,
@@ -82,36 +80,38 @@ export default function Navbar({
           onClick={() => navigate('/money')}
           style={{ cursor: 'pointer' }}
         >
-          <div className="navbar-brand-icon money-brand-icon">
-            <Coins size={22} color="#ffffff" />
+          <div className="navbar-brand-icon money-brand-icon" style={{ padding: 0, overflow: 'hidden' }}>
+            <svg width="34" height="34" viewBox="0 0 64 64" aria-label="Money Crest">
+              <defs>
+                <linearGradient id="navMoneyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#10b981" />
+                  <stop offset="50%" stopColor="#f59e0b" />
+                  <stop offset="100%" stopColor="#fbbf24" />
+                </linearGradient>
+              </defs>
+              <rect width="64" height="64" rx="14" fill="#071324" />
+              <rect x="7" y="17" width="38" height="24" rx="4" fill="#064e3b" stroke="#10b981" strokeWidth="2" />
+              <circle cx="26" cy="29" r="6" fill="#10b981" opacity="0.35" />
+              <circle cx="42" cy="36" r="15" fill="url(#navMoneyGrad)" stroke="#fef08a" strokeWidth="2" />
+              <text
+                x="42"
+                y="43"
+                textAnchor="middle"
+                fontFamily="Outfit, sans-serif"
+                fontWeight="800"
+                fontSize="20"
+                fill="#060b16"
+              >
+                ₹
+              </text>
+            </svg>
           </div>
           <div>
             <div className="navbar-brand-title-wrap">
-              <span className="navbar-brand-title">
-                Money <span className="gradient-text">OS</span>
-              </span>
-              <span className="badge badge-cyan navbar-pro-badge">
-                INSTITUTIONAL TERMINAL
+              <span className="navbar-brand-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                Money <span className="gradient-text">OS</span> • Investing &amp; Trading
               </span>
             </div>
-            <div className="navbar-brand-subtitle">
-              Wealth Portfolio, Quant Analytics, Derivatives & Pro Execution Desk
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Pill */}
-        <div className="app-switcher-container">
-          <div className="app-switcher-tabs">
-            <NavLink
-              to="/money"
-              className={({ isActive }) =>
-                `app-switcher-btn ${isActive ? 'active-money-os' : ''}`
-              }
-            >
-              <Activity size={15} />
-              <span>Wealth & Trading Terminal</span>
-            </NavLink>
           </div>
         </div>
 
@@ -127,9 +127,8 @@ export default function Navbar({
           </button>
 
           <div
-            className={`backend-health-indicator ${
-              backendStatus.connected ? 'connected' : 'hybrid'
-            }`}
+            className={`backend-health-indicator ${backendStatus.connected ? 'connected' : 'hybrid'
+              }`}
             title={`Backend Mode: ${backendStatus.connected ? 'Spring Boot + MongoDB Live' : 'Hybrid Local Ledger Active'}`}
           >
             <Database

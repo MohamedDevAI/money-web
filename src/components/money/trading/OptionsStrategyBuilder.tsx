@@ -25,7 +25,7 @@ import {
   computeBlackScholes,
   StrategyPresetId,
 } from '../../../domain/optionsEngine';
-import { iiflService, DEFAULT_IIFL_INSTRUMENTS } from '../../../services/iiflService';
+import { iiflService } from '../../../services/iiflService';
 import { formatINR, formatINRCompact } from '../../../utils/formatters';
 import { useMoneyPrivacy } from '../../../context/MoneyPrivacyContext';
 import type { OptionChainStrikeRow, OptionLeg, Trade, WatchlistInstrument } from '../../../interface';
@@ -50,35 +50,9 @@ export default function OptionsStrategyBuilder({
   const { mask } = useMoneyPrivacy();
 
   const fnOInstruments = useMemo(() => {
-    const live = watchlist.filter(
+    return watchlist.filter(
       (w) => w.exchange === 'NFO' || w.exchange === 'NSE' || w.exchange === 'BSE'
     );
-    if (live.length > 0) return live;
-    // When live watchlist is not yet populated, use metadata shells with 0 LTP
-    return DEFAULT_IIFL_INSTRUMENTS.map((m) => ({
-      symbol: m.symbol,
-      name: m.name,
-      exchange: m.exchange,
-      instrument: m.instrument,
-      sector: m.sector,
-      ltp: 0,
-      prevClose: 0,
-      open: 0,
-      high: 0,
-      low: 0,
-      change: 0,
-      changePct: 0,
-      volume: 0,
-      vwap: 0,
-      lotSize: m.lotSize,
-      atr14: 0,
-      rsi14: 50,
-      iv: 15,
-      pcr: 1,
-      bid: 0,
-      ask: 0,
-      tickDirection: 'flat' as const,
-    }));
   }, [watchlist]);
 
   const [selectedSymbol, setSelectedSymbol] = useState<string>(
