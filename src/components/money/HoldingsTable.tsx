@@ -7,11 +7,12 @@ import {
   Trash2,
   Layers,
   Repeat,
+  ShieldCheck,
   ShieldAlert,
   Building2,
   LineChart,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
 } from 'lucide-react';
 import type { InvestmentHolding, InvestmentCategory } from '../../types';
 import { formatINR, formatINRCompact, formatPctChange } from '../../utils/formatters';
@@ -35,7 +36,7 @@ export default function HoldingsTable({
   onSelectCategory,
   onOpenAddModal,
   onEditHolding,
-  onDeleteHolding
+  onDeleteHolding,
 }: HoldingsTableProps) {
   const { mask } = useMoneyPrivacy();
   const [searchQuery, setSearchQuery] = useState('');
@@ -145,48 +146,54 @@ export default function HoldingsTable({
         {/* Category Tabs */}
         <div className="category-tabs-group">
           {[
-            { key: 'All', label: 'All Holdings', count: holdings.length },
+            {
+              key: 'All',
+              label: 'All Holdings',
+              count: holdings.length,
+              icon: Layers,
+            },
             {
               key: 'Stocks',
               label: 'Stocks',
-              count: holdings.filter((h) => h.category === 'Stocks').length
+              count: holdings.filter((h) => h.category === 'Stocks').length,
+              icon: LineChart,
             },
             {
               key: 'Mutual Funds',
               label: 'SIPs & MFs',
               count: holdings.filter(
                 (h) => h.category === 'Mutual Funds' || h.category === 'SIPs'
-              ).length
+              ).length,
+              icon: Repeat,
             },
             {
               key: 'Bonds',
               label: 'Bonds',
-              count: holdings.filter((h) => h.category === 'Bonds').length
+              count: holdings.filter((h) => h.category === 'Bonds').length,
+              icon: ShieldCheck,
             },
             {
               key: 'FDs',
               label: 'Fixed Deposits (FD)',
-              count: holdings.filter((h) => h.category === 'FDs').length
-            }
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => onSelectCategory(tab.key)}
-              className={`category-tab-btn ${selectedCategory === tab.key ? 'active' : ''}`}
-            >
-              <span>{tab.label}</span>
-              <span
-                style={{
-                  fontSize: '0.7rem',
-                  padding: '1px 6px',
-                  borderRadius: 10,
-                  background: 'rgba(186, 54, 242, 0.11)'
-                }}
+              count: holdings.filter((h) => h.category === 'FDs').length,
+              icon: Building2,
+            },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = selectedCategory === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => onSelectCategory(tab.key)}
+                className={`category-tab-btn ${isActive ? 'active' : ''}`}
               >
-                {tab.count}
-              </span>
-            </button>
-          ))}
+                <Icon size={14} />
+                <span>{tab.label}</span>
+                <span className="category-tab-badge">{tab.count}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Search & Add action */}
@@ -199,7 +206,7 @@ export default function HoldingsTable({
                 left: 12,
                 top: '50%',
                 transform: 'translateY(-50%)',
-                color: 'var(--text-muted)'
+                color: 'var(--text-muted)',
               }}
             />
             <input
@@ -225,7 +232,7 @@ export default function HoldingsTable({
               fontSize: '0.82rem',
               display: 'flex',
               alignItems: 'center',
-              gap: 6
+              gap: 6,
             }}
           >
             <Plus size={15} />
@@ -292,7 +299,7 @@ export default function HoldingsTable({
                             background: 'rgba(186, 54, 242, 0.07)',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center'
+                            justifyContent: 'center',
                           }}
                         >
                           {getCategoryIcon(holding.category)}
@@ -423,7 +430,7 @@ export default function HoldingsTable({
                           fontSize: '0.78rem',
                           fontWeight: 700,
                           background: isGain ? 'rgba(16, 185, 129, 0.14)' : 'rgba(189, 46, 250, 0.12)',
-                          color: isGain ? '#10b981' : '#f43f5e'
+                          color: isGain ? '#10b981' : '#f43f5e',
                         }}
                       >
                         {isGain ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
@@ -475,7 +482,7 @@ export default function HoldingsTable({
                       fontSize: '0.82rem',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 6
+                      gap: 6,
                     }}
                   >
                     <Plus size={14} />
